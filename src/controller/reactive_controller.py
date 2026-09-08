@@ -20,6 +20,7 @@ REST_INSTANCE = "ndt_controller"
 BENCHMARK_UDP_PORT = 9000
 COOKIE_TABLE_MISS = 0x0
 COOKIE_REACTIVE = 0x10
+COOKIE_VERIFICATION = 0x20
 COOKIE_BENCHMARK = 0x30
 
 PRIORITY_TABLE_MISS = 0
@@ -42,15 +43,169 @@ class ReactiveController(app_manager.RyuApp):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.controller_id = os.getenv("CONTROLLER_ID", "unknown")
-        self.mac_to_port = {}
-        self.datapaths = {}
-        self.role_manager = RoleManager(self.logger)
-        self.barrier_manager = BarrierManager(self.logger)
-        self.telemetry = TelemetryAgent(self.controller_id, self.logger)
 
-        kwargs["wsgi"].register(NDTRestController, {REST_INSTANCE: self})
-        self._telemetry_thread = hub.spawn(self._telemetry_loop)
+        # =========================================================
+        # Controller identity
+        # =========================================================
+
+        self.controller_id = os.getenv(
+            "CONTROLLER_ID",
+            "unknown",
+        )
+
+        # =========================================================
+        # Runtime SDN state
+        # =========================================================
+
+        # MAC learning table:
+        #
+        # {
+        #     dpid: {
+        #         mac_address: port
+        #     }
+        # }
+        self.mac_to_port = {}
+
+        # Active OpenFlow datapaths connected to this controller.
+        #
+        # {
+        #     dpid: datapath
+        # }
+        self.datapaths = {}
+
+        # =========================================================
+        # Role / Barrier / Telemetry managers
+        # =========================================================
+
+        self.role_manager = RoleManager(
+            self.logger
+        )
+
+        self.barrier_manager = BarrierManager(
+            self.logger
+        )
+
+        self.telemetry = TelemetryAgent(
+            self.controller_id,
+            self.logger,
+        )
+
+        # =========================================================
+        # Benchmark workload configuration
+        # =========================================================
+        #
+        # Benchmark behavior must be explicitly enabled.
+        #
+        # Normal runtime:
+        #
+        #   NDT_BENCHMARK_ENABLED=0
+        #
+        # Workload / capacity experiment:
+        #
+        #   NDT_BENCHMARK_ENABLED=1
+        #
+        # This prevents normal UDP traffic to port 9000 from being
+        # incorrectly treated as benchmark traffic.
+        # =========================================================
+
+        self.benchmark_enabled = (
+            os.getenv(
+                "NDT_BENCHMARK_ENABLED",
+                "0",
+            ).strip().lower()
+            in {
+                "1",
+                "true",
+                "yes",
+                "on",
+            }
+        )
+
+        # UDP destination port used by the controlled new-flow
+        # workload generator.
+        try:
+            self.benchmark_udp_port = int(
+                os.getenv(
+                    "NDT_BENCHMARK_UDP_PORT",
+                    "9000",
+                )
+            )
+        except ValueError as exc:
+            raise ValueError(
+                "NDT_BENCHMARK_UDP_PORT "
+                "must be an integer"
+            ) from exc
+
+        if not (
+            1
+            <= self.benchmark_udp_port
+            <= 65535
+        ):
+            raise ValueError(
+                "NDT_BENCHMARK_UDP_PORT "
+                "must be in [1, 65535]"
+            )
+
+        # Benchmark flow entries intentionally use a short
+        # idle timeout so stale benchmark rules do not accumulate
+        # in OVS and distort controller-capacity measurements.
+        try:
+            self.benchmark_idle_timeout = int(
+                os.getenv(
+                    "NDT_BENCHMARK_FLOW_IDLE_TIMEOUT",
+                    "5",
+                )
+            )
+        except ValueError as exc:
+            raise ValueError(
+                "NDT_BENCHMARK_FLOW_IDLE_TIMEOUT "
+                "must be an integer"
+            ) from exc
+
+        if self.benchmark_idle_timeout <= 0:
+            raise ValueError(
+                "NDT_BENCHMARK_FLOW_IDLE_TIMEOUT "
+                "must be > 0"
+            )
+
+        # =========================================================
+        # REST API
+        # =========================================================
+
+        wsgi = kwargs["wsgi"]
+
+        wsgi.register(
+            NDTRestController,
+            {
+                REST_INSTANCE: self,
+            },
+        )
+
+        # =========================================================
+        # Telemetry sampling loop
+        # =========================================================
+
+        self._telemetry_thread = hub.spawn(
+            self._telemetry_loop
+        )
+
+        # =========================================================
+        # Startup logging
+        # =========================================================
+
+        self.logger.info(
+            (
+                "CONTROLLER_INITIALIZED "
+                "controller=%s "
+                "benchmark_enabled=%s "
+                "benchmark_udp_port=%s "
+                "benchmark_idle_timeout=%ss"
+            ),
+            self.controller_id,
+            self.benchmark_enabled,
+            self.benchmark_udp_port,
+            self.benchmark_idle_timeout,
+        )
 
     def _telemetry_loop(self):
         while True:
@@ -136,7 +291,13 @@ class ReactiveController(app_manager.RyuApp):
         # 1. Detect UDP benchmark traffic
         ip_pkt = pkt.get_protocol(ipv4.ipv4)
         udp_pkt = pkt.get_protocol(udp.udp)
-        is_benchmark = (ip_pkt is not None and udp_pkt is not None and udp_pkt.dst_port == BENCHMARK_UDP_PORT)
+        is_benchmark = (
+            self.benchmark_enabled
+            and ip_pkt is not None
+            and udp_pkt is not None
+            and udp_pkt.dst_port
+            == self.benchmark_udp_port
+        )
 
         # 2. MAC learning
         self.mac_to_port.setdefault(dpid, {})
@@ -153,12 +314,12 @@ class ReactiveController(app_manager.RyuApp):
                     ip_proto=17, udp_src=udp_pkt.src_port, udp_dst=udp_pkt.dst_port)
                 priority = PRIORITY_BENCHMARK
                 cookie = COOKIE_BENCHMARK
-                idle_timeout = IDLE_TIMEOUT_BENCHMARK
+                idle_timeout = self.benchmark_idle_timeout
             else:
                 match = parser.OFPMatch(in_port=in_port, eth_dst=dst, eth_src=src)
                 priority = PRIORITY_REACTIVE
                 cookie = COOKIE_REACTIVE
-                idle_timeout = IDLE_TIMEOUT_REACTIVE
+                idle_timeout = self.benchmark_idle_timeout
 
             if msg.buffer_id != ofp.OFP_NO_BUFFER:
                 self.add_flow(dp, priority, match, actions, buffer_id=msg.buffer_id, idle_timeout=idle_timeout, cookie=cookie)
@@ -264,6 +425,6 @@ class NDTRestController(ControllerBase):
 
         parser = dp.ofproto_parser
         match = parser.OFPMatch(eth_type=0x88B5)
-        self.app.add_flow(dp, priority=100, match=match, actions=[], idle_timeout=5,)
+        self.app.add_flow(dp, priority=100, match=match, actions=[], idle_timeout=5,cookie=COOKIE_VERIFICATION)
 
         return json_response({"status": "FLOW_MOD_SENT", "dpid": int(dpid), "role": role,})
