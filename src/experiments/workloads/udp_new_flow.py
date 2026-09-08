@@ -861,8 +861,6 @@ def main() -> None:
                 }
             )
         )
-        for line in workload.jsonl:
-            workload_sample = json.loads(line)
 
     except (
         OSError,
