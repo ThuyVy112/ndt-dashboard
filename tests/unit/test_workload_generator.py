@@ -128,7 +128,7 @@ class TestDeadlinePacer(
         self.assertEqual(
             pacer.deadline_ns(
                 start_ns,
-                0,
+                10,
             ),
             1_000_000_000,
         )
@@ -140,6 +140,27 @@ class TestDeadlinePacer(
             ),
             1_100_000_000,
         )
+
+    def test_period_ms_matches_rate(
+        self,
+    ):
+        cases = [
+            (10, 100.0),
+            (20, 50.0),
+            (50, 20.0),
+            (100, 10.0),
+            (200, 5.0),
+            (500, 2.0),
+            (1000, 1.0),
+        ]
+
+        for rate, expected_ms in cases:
+            pacer = DeadlinePacer(rate=rate)
+            self.assertAlmostEqual(
+                pacer.period_ms,
+                expected_ms,
+                places=6,
+            )
 
     def test_wait_until_sleeps_remaining_time(
         self,

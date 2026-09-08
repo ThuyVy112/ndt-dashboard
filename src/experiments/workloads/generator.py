@@ -131,8 +131,7 @@ class DeadlinePacer:
     def period_ms(self) -> float:
         return (
             self.period_ns
-            / NANOSECONDS_PER_SECOND
-            * MILLISECONDS_PER_SECOND
+            / 1_000_000.0
         )
 
     def deadline_ns(
