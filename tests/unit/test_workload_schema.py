@@ -48,6 +48,40 @@ class WorkloadSchemaTests(unittest.TestCase):
             "h1",
         )
 
+        self.assertEqual(
+            payload["target_host"],
+            "h2",
+        )
+
+        # add assertions for protocol and pattern fields
+        # CLI: --protocol udp --pattern stable
+        # h1 python3 -m src.experiments.workloads.udp_new_flow \
+        #     --run-id workload-c1-10-r01 \
+        #     --source-host h1 \
+        #     --source-ip 10.0.0.1 \
+        #     --target-host h2 \
+        #     --target-ip 10.0.0.2 \
+        #     --target-port 9000 \
+        #     --pattern stable \
+        #     --rate 10 \
+        #     --duration 20 \
+        #     --sample-interval 1 \
+        #     --source-port-start 12000 \
+        #     --source-port-end 65000 \
+        #     --flow-idle-timeout 5 \
+        #     --port-reuse-safety-factor 2 \
+        #     --output /tmp/workload-c1-10-r01.jsonl
+
+        self.assertEqual(
+            payload["protocol"],
+            "udp",
+        )
+
+        self.assertEqual(
+            payload["pattern"],
+            "stable",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

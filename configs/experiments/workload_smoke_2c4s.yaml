@@ -25,6 +25,11 @@ benchmark_flow:
   cookie: 0x30
   idle_timeout_seconds: 5
 
+validation:
+  port_reuse_safety_factor: 2.0
+  emitted_rate_tolerance_percent: 5.0
+  max_send_error_rate: 0.01
+
 scenarios:
   c1:
     target_controller: c1
