@@ -128,7 +128,7 @@ class TestDeadlinePacer(
         self.assertEqual(
             pacer.deadline_ns(
                 start_ns,
-                10,
+                0,
             ),
             1_000_000_000,
         )
