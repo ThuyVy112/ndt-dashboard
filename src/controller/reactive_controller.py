@@ -299,6 +299,26 @@ class ReactiveController(app_manager.RyuApp):
             == self.benchmark_udp_port
         )
 
+        self.logger.info(
+            "BENCHMARK_CLASSIFY"
+            "controller=%s dpid=%016x in_port=%s src=%s dst=%s " \
+            "eth_type=%s "
+            "ip_src=%s ip_dst=%s ip_proto=%s udp_src=%s udp_dst=%s " \
+            "is_benchmark=%s" ,
+            self.controller_id,
+            dpid,
+            hex(eth.ethertype),
+            in_port,
+            src,
+            dst,
+            getattr(ip_pkt, "src", None),
+            getattr(ip_pkt, "dst", None),
+            getattr(ip_pkt, "proto", None),
+            getattr(udp_pkt, "src_port", None),
+            getattr(udp_pkt, "dst_port", None),
+            is_benchmark
+        )
+
         # 2. MAC learning
         self.mac_to_port.setdefault(dpid, {})
         self.mac_to_port[dpid][src] = in_port
