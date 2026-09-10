@@ -28,10 +28,10 @@ DEFAULT_PATTERN = "stable"
 PROTOCOL = "udp"
 SUPPORTED_PATTERNS = [
     "stable",
-    "gradual",
-    "burst",
-    "oscillating",
-    "hot_switch",
+    # "gradual",
+    # "burst",
+    # "oscillating",
+    # "hot_switch",
 ]
 
 
@@ -284,12 +284,12 @@ def send_udp_flow(
             ),
         )
 
-        # --report-every 5 --> log received_packets, receive_rate
-        sock.setsockopt(
-            socket.SOL_SOCKET,
-            socket.SO_RCVBUF,
-            4 * 1024 * 1024
-        )
+        # # --report-every 5 --> log received_packets, receive_rate
+        # sock.setsockopt(
+        #     socket.SOL_SOCKET,
+        #     socket.SO_RCVBUF,
+        #     4 * 1024 * 1024
+        # )
 
 
 
@@ -655,10 +655,7 @@ def run_generator(
             # at least one full intended inter-flow period.
             # =================================================
 
-            if (
-                schedule_lag_ms
-                > pacer.period_ms / 1_000_000.0
-            ):
+            if schedule_lag_ms > pacer.period_ms:
                 interval_late_events += 1
                 cumulative_late_events += 1
 

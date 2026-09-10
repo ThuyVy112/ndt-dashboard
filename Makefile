@@ -7,7 +7,7 @@ lint:
 	python3 -m ruff check src/schemas src/telemetry src/orchestrator/app.py src/orchestrator/current_state.py tests/unit
 	
 typecheck:
-	python3 -m mypy --ignore-missing-imports src/schemas src/telemetry src/experiments src/orchestrator/current_state.py
+	python3 -m mypy --ignore-missing-imports src/schemas src/telemetry src/experiments src/orchestrator/current_state.py tests/unit
 
 test:
 	python3 -m unittest discover -s tests/unit -v
