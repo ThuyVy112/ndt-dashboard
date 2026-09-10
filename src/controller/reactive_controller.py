@@ -292,31 +292,31 @@ class ReactiveController(app_manager.RyuApp):
         ip_pkt = pkt.get_protocol(ipv4.ipv4)
         udp_pkt = pkt.get_protocol(udp.udp)
         is_benchmark = (
-            self.benchmark_enabled
-            and ip_pkt is not None
+            ip_pkt is not None
             and udp_pkt is not None
-            and udp_pkt.dst_port
-            == self.benchmark_udp_port
+            and udp_pkt.dst_port == BENCHMARK_UDP_PORT
         )
 
         self.logger.info(
-            "BENCHMARK_CLASSIFY"
-            "controller=%s dpid=%016x in_port=%s src=%s dst=%s " \
+            "BENCHMARK_CLASSIFY "
+            "controller=%s dpid=%016x "
+            "in_port=%s src=%s dst=%s "
             "eth_type=%s "
-            "ip_src=%s ip_dst=%s ip_proto=%s udp_src=%s udp_dst=%s " \
-            "is_benchmark=%s" ,
+            "ip_src=%s ip_dst=%s ip_proto=%s "
+            "udp_src=%s udp_dst=%s "
+            "is_benchmark=%s",
             self.controller_id,
             dpid,
-            hex(eth.ethertype),
             in_port,
             src,
             dst,
+            hex(eth.ethertype),
             getattr(ip_pkt, "src", None),
             getattr(ip_pkt, "dst", None),
             getattr(ip_pkt, "proto", None),
             getattr(udp_pkt, "src_port", None),
             getattr(udp_pkt, "dst_port", None),
-            is_benchmark
+            is_benchmark,
         )
 
         # 2. MAC learning
@@ -334,12 +334,12 @@ class ReactiveController(app_manager.RyuApp):
                     ip_proto=17, udp_src=udp_pkt.src_port, udp_dst=udp_pkt.dst_port)
                 priority = PRIORITY_BENCHMARK
                 cookie = COOKIE_BENCHMARK
-                idle_timeout = self.benchmark_idle_timeout
+                idle_timeout = IDLE_TIMEOUT_BENCHMARK
             else:
                 match = parser.OFPMatch(in_port=in_port, eth_dst=dst, eth_src=src)
                 priority = PRIORITY_REACTIVE
                 cookie = COOKIE_REACTIVE
-                idle_timeout = self.benchmark_idle_timeout
+                idle_timeout = IDLE_TIMEOUT_REACTIVE
 
             if msg.buffer_id != ofp.OFP_NO_BUFFER:
                 self.add_flow(dp, priority, match, actions, buffer_id=msg.buffer_id, idle_timeout=idle_timeout, cookie=cookie)
