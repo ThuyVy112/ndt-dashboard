@@ -286,7 +286,34 @@ class ReactiveController(app_manager.RyuApp):
                 cookie = COOKIE_BENCHMARK
                 idle_timeout = IDLE_TIMEOUT_BENCHMARK
             else:
-                match = parser.OFPMatch(in_port=in_port, eth_dst=dst, eth_src=src)
+                reactive_match = {
+                    "in_port": in_port,
+                    "eth_src": src,
+                    "eth_dst": dst,
+                    "eth_type": eth.ethertype,
+                }
+
+                if ip_pkt is not None:
+                    reactive_match.update(
+                        {
+                            "ipv4_src": ip_pkt.src,
+                            "ipv4_dst": ip_pkt.dst,
+                            "ip_proto": ip_pkt.proto,
+                        }
+                    )
+
+                    if udp_pkt is not None:
+                        reactive_match.update(
+                            {
+                                "udp_src": udp_pkt.src_port,
+                                "udp_dst": udp_pkt.dst_port,
+                            }
+                        )
+
+                match = parser.OFPMatch(
+                    **reactive_match
+                )
+
                 priority = PRIORITY_REACTIVE
                 cookie = COOKIE_REACTIVE
                 idle_timeout = IDLE_TIMEOUT_REACTIVE
