@@ -91,84 +91,6 @@ class ReactiveController(app_manager.RyuApp):
         )
 
         # =========================================================
-        # Benchmark workload configuration
-        # =========================================================
-        #
-        # Benchmark behavior must be explicitly enabled.
-        #
-        # Normal runtime:
-        #
-        #   NDT_BENCHMARK_ENABLED=0
-        #
-        # Workload / capacity experiment:
-        #
-        #   NDT_BENCHMARK_ENABLED=1
-        #
-        # This prevents normal UDP traffic to port 9000 from being
-        # incorrectly treated as benchmark traffic.
-        # =========================================================
-
-        self.benchmark_enabled = (
-            os.getenv(
-                "NDT_BENCHMARK_ENABLED",
-                "0",
-            ).strip().lower()
-            in {
-                "1",
-                "true",
-                "yes",
-                "on",
-            }
-        )
-
-        # UDP destination port used by the controlled new-flow
-        # workload generator.
-        try:
-            self.benchmark_udp_port = int(
-                os.getenv(
-                    "NDT_BENCHMARK_UDP_PORT",
-                    "9000",
-                )
-            )
-        except ValueError as exc:
-            raise ValueError(
-                "NDT_BENCHMARK_UDP_PORT "
-                "must be an integer"
-            ) from exc
-
-        if not (
-            1
-            <= self.benchmark_udp_port
-            <= 65535
-        ):
-            raise ValueError(
-                "NDT_BENCHMARK_UDP_PORT "
-                "must be in [1, 65535]"
-            )
-
-        # Benchmark flow entries intentionally use a short
-        # idle timeout so stale benchmark rules do not accumulate
-        # in OVS and distort controller-capacity measurements.
-        try:
-            self.benchmark_idle_timeout = int(
-                os.getenv(
-                    "NDT_BENCHMARK_FLOW_IDLE_TIMEOUT",
-                    "5",
-                )
-            )
-        except ValueError as exc:
-            raise ValueError(
-                "NDT_BENCHMARK_FLOW_IDLE_TIMEOUT "
-                "must be an integer"
-            ) from exc
-
-        if self.benchmark_idle_timeout <= 0:
-            raise ValueError(
-                "NDT_BENCHMARK_FLOW_IDLE_TIMEOUT "
-                "must be > 0"
-            )
-
-        # =========================================================
         # REST API
         # =========================================================
 
@@ -194,17 +116,15 @@ class ReactiveController(app_manager.RyuApp):
         # =========================================================
 
         self.logger.info(
-            (
-                "CONTROLLER_INITIALIZED "
-                "controller=%s "
-                "benchmark_enabled=%s "
-                "benchmark_udp_port=%s "
-                "benchmark_idle_timeout=%ss"
-            ),
+            "CONTROLLER_INITIALIZED "
+            "controller=%s "
+            "benchmark_udp_port=%s "
+            "benchmark_idle_timeout=%ss "
+            "reactive_idle_timeout=%ss",
             self.controller_id,
-            self.benchmark_enabled,
-            self.benchmark_udp_port,
-            self.benchmark_idle_timeout,
+            BENCHMARK_UDP_PORT,
+            IDLE_TIMEOUT_BENCHMARK,
+            IDLE_TIMEOUT_REACTIVE,
         )
 
     def _telemetry_loop(self):
@@ -218,17 +138,47 @@ class ReactiveController(app_manager.RyuApp):
     def get_datapath(self, dpid: int):
         return self.datapaths.get(int(dpid))
 
-    @set_ev_cls(ofp_event.EventOFPStateChange, [MAIN_DISPATCHER, DEAD_DISPATCHER])
+    @set_ev_cls(
+        ofp_event.EventOFPStateChange,
+        [MAIN_DISPATCHER, DEAD_DISPATCHER],
+    )
     def state_change_handler(self, ev):
         dp = ev.datapath
+        dpid = getattr(dp, "id", None)
+
         if ev.state == MAIN_DISPATCHER:
-            self.datapaths[dp.id] = dp
+            if dpid is None:
+                self.logger.warning(
+                    "CHANNEL_UP_WITHOUT_DPID controller=%s",
+                    self.controller_id,
+                )
+                return
+
+            self.datapaths[dpid] = dp
             self.role_manager.register_datapath(dp)
-            self.telemetry.register_switch(dp.id)
-            self.logger.info("CHANNEL_UP controller=%s dpid=%016x", self.controller_id, dp.id)
+            self.telemetry.register_switch(dpid)
+
+            self.logger.info(
+                "CHANNEL_UP controller=%s dpid=%016x",
+                self.controller_id,
+                dpid,
+            )
+
         elif ev.state == DEAD_DISPATCHER:
-            self.datapaths.pop(dp.id, None)
-            self.logger.info("CHANNEL_DOWN controller=%s dpid=%016x", self.controller_id, dp.id)
+            if dpid is not None:
+                self.datapaths.pop(dpid, None)
+
+            dpid_text = (
+                f"{dpid:016x}"
+                if dpid is not None
+                else "unknown"
+            )
+
+            self.logger.info(
+                "CHANNEL_DOWN controller=%s dpid=%s",
+                self.controller_id,
+                dpid_text,
+            )
 
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
     def switch_features_handler(self, ev):
