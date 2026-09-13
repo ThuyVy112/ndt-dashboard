@@ -39,6 +39,7 @@ class ExperimentMetadataTests(
             target_ip="10.0.0.2",
             protocol="udp",
             target_port=9000,
+            workload_sample_interval_seconds=1.0,
             benchmark_idle_timeout_seconds=5.0,
             telemetry_interval_seconds=1.0,
             warmup_seconds=5.0,
