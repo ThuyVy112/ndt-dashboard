@@ -73,6 +73,18 @@ def validate_capacity_config(
                 f"missing config section: {section}"
             )
 
+    schema_version = config.get(
+        "schema_version"
+    )
+
+    if not isinstance(
+        schema_version,
+        str,
+    ) or not schema_version.strip():
+        raise ValueError(
+            "schema_version is required"
+        )
+
     # =========================================================
     # 2. Experiment
     # =========================================================
@@ -549,6 +561,18 @@ def validate_capacity_config(
                 0,
             )
         )
+
+        ranges_overlap = not (
+            qos_port_end < source_port_start
+            or qos_port_start > source_port_end
+        )
+
+        if ranges_overlap:
+            raise ValueError(
+                "qos_probe source-port range "
+                "must not overlap workload "
+                "source-port range"
+            )
 
         if not (
             1024
