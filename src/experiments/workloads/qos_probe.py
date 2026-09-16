@@ -7,7 +7,6 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from urllib import response
 
 from src.experiments.workloads.generator import DeadlinePacer, JsonlWriter, PortAllocator, validate_port_reuse
 
