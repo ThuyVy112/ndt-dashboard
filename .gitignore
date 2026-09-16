@@ -28,6 +28,42 @@ data/raw/*
 data/snapshots/*
 !data/snapshots/.gitkeep
 
+# Capacity experiment runs
+data/experiment_runs/*
+!data/experiment_runs/.gitkeep
+
+# Generated benchmark results
+data/benchmarks/*
+!data/benchmarks/.gitkeep
+!data/benchmarks/reports/
+!data/benchmarks/reports/.gitkeep
+
+# Forecast datasets
+data/forecasting/raw/*
+!data/forecasting/raw/.gitkeep
+
+data/forecasting/processed/*
+!data/forecasting/processed/.gitkeep
+
+data/forecasting/splits/*
+!data/forecasting/splits/.gitkeep
+
+data/forecasting/reports/*
+!data/forecasting/reports/.gitkeep
+
+# Outcome datasets
+data/outcome/raw/*
+!data/outcome/raw/.gitkeep
+
+data/outcome/processed/*
+!data/outcome/processed/.gitkeep
+
+data/outcome/splits/*
+!data/outcome/splits/.gitkeep
+
+data/outcome/reports/*
+!data/outcome/reports/.gitkeep
+
 logs/ci/*
 !logs/ci/.gitkeep
 
