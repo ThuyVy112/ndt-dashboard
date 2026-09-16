@@ -25,7 +25,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--source-port-start", type=int, default=2000)
     parser.add_argument("--source-port-end", type=int, default=10000)
     parser.add_argument("--flow-idle-timeout", type=float, default=30.0)
-    parser.add_argument("--flow-idle-timeout", type=float, default=30.0)
     parser.add_argument("--output", type=Path, required=True)
     return parser
 
