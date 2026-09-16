@@ -1,14 +1,21 @@
-# NDT Safe Load Balancing — Observable Role Migration MVP
+# NDT Safe Load Balancing — Observable Role Migration and Capacity Benchmark
 
-This repository is the current Phase-1 implementation of the thesis: multi-controller SDN role migration plus telemetry, state, snapshots, verification and rollback.
+This repository contains the Phase-1 multi-controller SDN role migration system
+and a 2-controller, 4-switch capacity smoke benchmark. It includes telemetry,
+state snapshots, migration verification, rollback, workload generation, QoS
+probing, and capacity-run validation.
 
 ## Current milestone
 
-The milestone is complete only when the following chain is observable end to end:
+The role-migration milestone is complete when the following chain is observable
+end to end:
 
 `Ryu C1/C2 -> telemetry every 1 s -> Central Orchestrator -> raw JSONL -> coherent snapshot every 5 s -> migration -> ownership/role change -> post-migration snapshot -> rollback snapshot`
 
-Do **not** start forecasting, XGBoost/Random Forest, safe-capacity modeling, 20/40-switch experiments or dashboard work until this milestone passes.
+The next research stages are safe-capacity modeling, forecasting, larger
+topologies, and dashboards. The current capacity implementation is limited to
+the configured 2C4S smoke benchmark; it does not claim those later stages are
+complete.
 
 ## Repository responsibilities
 
@@ -16,9 +23,12 @@ Do **not** start forecasting, XGBoost/Random Forest, safe-capacity modeling, 20/
 - `src/orchestrator/`: global ownership, transactions and latest runtime state.
 - `src/telemetry/`: polling, raw storage, snapshot building and validation.
 - `src/execution/`: migration, verification and rollback.
+- `src/experiments/`: capacity benchmark runner, collector, aggregation,
+  validation, topology, and workload components.
 - `src/schemas/`: shared contracts. Both developers must use these classes rather than inventing separate JSON shapes.
 - `tests/unit/`: fast tests that run on every PR.
 - `tests/integration/`: real 2C-4S SDN smoke test for the GCP self-hosted runner.
+- `docs/capacity-benchmark.md`: focused and full capacity-run procedures.
 
 ## Branch workflow for two developers
 
@@ -27,11 +37,11 @@ Protected branches:
 - `main`: stable thesis milestones/releases only.
 - `dev`: integration branch. No direct feature coding here.
 
-Feature branches:
+Feature branches should use one branch per feature, for example:
 
-- Person 1: `feat/role-migration-transaction`
-- Person 2: `feat/telemetry-state`
-- Later work: one branch per feature, for example `feat/capacity-benchmark`.
+- `feat/role-migration-transaction`
+- `feat/telemetry-state`
+- `feat/capacity-benchmark`
 
 Before starting a new feature, update `dev` first:
 
@@ -272,8 +282,8 @@ Again generate a fresh Packet-In while the request is verifying. Expected transa
 ```bash
 source ~/ndt-venv/bin/activate
 python -m compileall -q src tests
-ruff check src/schemas src/telemetry src/orchestrator/app.py src/orchestrator/current_state.py tests/unit
-mypy --ignore-missing-imports src/schemas src/telemetry src/orchestrator/current_state.py
+ruff check src/schemas src/telemetry src/experiments src/orchestrator/app.py src/orchestrator/current_state.py tests/unit
+mypy --ignore-missing-imports src/schemas src/telemetry src/experiments src/orchestrator/current_state.py
 python -m unittest discover -s tests/unit -v
 ```
 
@@ -299,7 +309,7 @@ make clean-sdn
 2. Python setup;
 3. compile;
 4. Ruff;
-5. Mypy on MVP data/state modules;
+5. Mypy on the application and experiment modules;
 6. unit tests.
 
 This job intentionally does not run Mininet because it needs kernel/OVS privileges and the thesis-specific Ryu environment.
@@ -316,23 +326,26 @@ The workflow runs the real 2C-4S smoke test: roles -> traffic -> telemetry -> va
 
 `.github/workflows/deploy.yml` is `workflow_dispatch` only. It runs unit tests and the same real SDN smoke test on the GCP runner. At this phase the "deployment" target is the reproducible thesis testbed, not a production service. Do not auto-deploy every feature branch.
 
-## Definition of Done before starting capacity benchmark
+## Capacity benchmark status
 
-- [ ] `/api/v1/telemetry` works on C1 and C2.
-- [ ] Controller has observed/ingested timestamps, CPU, RSS, Packet-In total/rate, processed Packet-In total/rate, Flow-Mod total/rate, response mean/p95.
-- [ ] Per-switch Packet-In, processed Packet-In, Flow-Mod and `control_load_share` are present.
-- [ ] One unavailable controller does not stop polling of the other controller.
-- [ ] `controllers.jsonl` and `switches.jsonl` are written under one `RUN_ID`.
-- [ ] Snapshot is created every 5 seconds.
-- [ ] `fresh`, `complete`, `consistent`, `valid` are computed.
-- [ ] Consistency checks actual OpenFlow role/connectivity against ownership.
-- [ ] Pre-migration snapshot is valid.
-- [ ] C1 -> C2 or C2 -> C1 migration reaches `COMMITTED`.
-- [ ] Post-migration snapshot reflects the new owner and `ownership_version`.
-- [ ] Fault injection reaches `RESTORED`.
-- [ ] Rollback snapshot reflects the restored owner and is consistent.
-- [ ] Unit CI is green.
-- [ ] Self-hosted 2C-4S integration workflow is green.
-- [ ] Both feature PRs are reviewed and merged into `dev`.
+The capacity benchmark implementation is present and includes:
 
-Only after every item above passes should the project move to: workload generator -> controller capacity benchmark -> safe-capacity estimation -> forecasting dataset.
+- controller, switch, workload, QoS, snapshot, and collector-error JSONL
+  streams;
+- measurement-window aggregation with means, maxima, and p95 metrics;
+- 80% workload/controller sample-coverage validation;
+- switch-sample and collector-error validation;
+- controller readiness polling before role initialization;
+- safe cleanup of experiment cookies `0x10`, `0x20`, and `0x30` while retaining
+  the table-miss flow;
+- benchmark-flow expiry verification after cooldown;
+- unit tests for the aggregator, validator, and QoS probe.
+
+Run the focused case before the full matrix on a prepared SDN host. The complete
+manual procedure and output contract are in
+`docs/capacity-benchmark.md`. The benchmark is not executed by the
+GitHub-hosted unit-test job; it requires the self-hosted Linux/Mininet/OVS
+environment.
+
+After the 2C4S benchmark has produced valid runs, the next work can extend the
+experiment matrix and build safe-capacity estimation and forecasting datasets.

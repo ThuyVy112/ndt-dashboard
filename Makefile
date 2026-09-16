@@ -4,8 +4,8 @@ compile:
 	python3 -m compileall -q src tests
 
 lint:
-	python3 -m ruff check src/schemas src/telemetry src/orchestrator/app.py src/orchestrator/current_state.py tests/unit
-	
+	python3 -m ruff check src/schemas src/telemetry src/experiments src/orchestrator/app.py src/orchestrator/current_state.py tests/unit
+
 typecheck:
 	python3 -m mypy --ignore-missing-imports src/schemas src/telemetry src/experiments src/orchestrator/current_state.py tests/unit
 
@@ -15,7 +15,7 @@ test:
 ci: compile lint typecheck test
 
 smoke:
-	./scripts/ci/smoke_test.sh
+	./scripts/smoke_test.sh
 
 clean-sdn:
 	./scripts/cleanup.sh
