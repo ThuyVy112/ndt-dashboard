@@ -1,0 +1,16 @@
+{
+  "controller_id": "c1",
+  "observed_at": "2026-09-12T07:30:28.264564+00:00",
+  "packet_in_total": 5435,
+  "packet_in_rate": 0,
+  "processed_packet_in_total": 5366,
+  "processed_packet_in_rate": 0,
+  "flow_mod_total": 5215,
+  "flow_mod_rate": 0,
+  "process_cpu_percent": 1,
+  "process_memory_rss_mb": 49.02734375,
+  "response_mean_ms": 0,
+  "response_p95_ms": 0,
+  "managed_switch_count": 2,
+  "sample_interval_ms": 1001.3676490052603
+}
