@@ -134,6 +134,26 @@ class ExperimentMetadata:
                 "topology must not be empty"
             )
 
+        if not self.workload_pattern.strip():
+            raise ValueError(
+                "workload_pattern must not be empty"
+            )
+
+        if not self.source_ip.strip():
+            raise ValueError(
+                "source_ip must not be empty"
+            )
+
+        if not self.target_ip.strip():
+            raise ValueError(
+                "target_ip must not be empty"
+            )
+
+        if not self.git_commit.strip():
+            raise ValueError(
+                "git_commit must not be empty"
+            )
+
         if self.controller_count <= 0:
             raise ValueError(
                 "controller_count must be > 0"
@@ -261,6 +281,14 @@ class ExperimentMetadata:
             raise ValueError(
                 "ended_at must be >= "
                 "measurement_ended_at"
+            )
+
+        if (
+            self.ended_at is not None
+            and self.ended_at < self.started_at
+        ):
+            raise ValueError(
+                "ended_at must be >= started_at"
             )
 
     @property

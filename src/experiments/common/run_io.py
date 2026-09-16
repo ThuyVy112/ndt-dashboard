@@ -124,12 +124,16 @@ def restore_sudo_owner(
 
     uid = int(uid_text)
     gid = int(gid_text)
+    chown = getattr(os, "chown", None)
+
+    if chown is None:
+        return
 
     for current in [path] + list(
         path.rglob("*")
     ):
         try:
-            os.chown(
+            chown(
                 current,
                 uid,
                 gid,

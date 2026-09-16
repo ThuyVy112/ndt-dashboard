@@ -455,8 +455,6 @@ def run_generator(
     interval_first_source_port = None
     interval_last_source_port = None
 
-    last_sample: WorkloadSample | None = None
-
     with JsonlWriter(args.output) as writer:
 
         # =====================================================
@@ -585,7 +583,7 @@ def run_generator(
 
             while deadline_ns >= next_sample_ns:
 
-                last_sample = flush_interval(
+                flush_interval(
                     next_sample_ns
                 )
 
@@ -715,7 +713,7 @@ def run_generator(
 
         while next_sample_ns <= end_ns:
 
-            last_sample = flush_interval(
+            flush_interval(
                 next_sample_ns
             )
 
@@ -738,7 +736,7 @@ def run_generator(
 
         if interval_started_ns < end_ns:
 
-            last_sample = flush_interval(
+            flush_interval(
                 end_ns
             )
 

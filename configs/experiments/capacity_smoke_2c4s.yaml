@@ -67,11 +67,10 @@ qos_probe:
   target_port: 9001
   rate_per_second: 2.0
 
-  source_port_start: 30000
-  source_port_end: 45000
+  source_port_start: 2000
+  source_port_end: 10000
 
   flow_idle_timeout_seconds: 30.0
-
   response_timeout_seconds: 1.0
 
 telemetry:

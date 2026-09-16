@@ -1,92 +1,151 @@
-# Apply this telemetry patch to the current repository
+# Apply and verify the capacity benchmark
 
-This bundle is an overlay, not a complete repository.
+This repository already contains the capacity benchmark implementation. This
+file is a verification runbook, not an overlay patch. Do not unzip or rsync a
+separate telemetry bundle on top of the repository.
 
-## 1. Start from the latest integration branch
+## 1. Check the working tree
+
+Run these commands before editing or applying additional changes:
 
 ```bash
-git checkout dev
-git fetch origin
-git pull --ff-only origin dev
 git status
 git log --oneline -5
-git checkout -b feat/telemetry-state
 ```
 
-Do not continue if `git status` shows unrelated uncommitted changes.
-
-## 2. Extract the patch outside the repository
-
-Example:
+Keep unrelated local changes intact. Review the current diff before committing:
 
 ```bash
-unzip ndt_telemetry_completion_patch.zip -d /tmp/ndt-telemetry-patch
-```
-
-## 3. Preview the overlay
-
-From any directory, replace `<REPO>` with the repository path:
-
-```bash
-rsync -avnc /tmp/ndt-telemetry-patch/ndt_telemetry_completion_patch/ <REPO>/
-```
-
-`-n` is dry-run. Nothing is written yet.
-
-## 4. Apply without deleting unrelated repository files
-
-```bash
-rsync -avc /tmp/ndt-telemetry-patch/ndt_telemetry_completion_patch/ <REPO>/
-cd <REPO>
-git status
 git diff --stat
 git diff
 ```
 
-There is intentionally no `--delete`; files that are not part of the telemetry patch are preserved.
+## 2. Prepare Python environments
 
-## 5. Validate locally
+The Ryu controllers and orchestrator use separate virtual environments:
 
 ```bash
+python3 -m venv ~/ndt-venv
 source ~/ndt-venv/bin/activate
+python -m pip install --upgrade pip
 pip install -r requirements-orchestrator.txt
 pip install -r requirements-dev.txt
-make ci
-```
+deactivate
 
-For the controller environment:
-
-```bash
 source ~/ryu-venv/bin/activate
 pip install -r requirements-controller-extra.txt
-python -m py_compile src/controller/telemetry_agent.py src/controller/reactive_controller.py
+deactivate
 ```
 
-The real `make smoke` test must run on the prepared SDN host with Mininet/Open vSwitch and both virtualenvs available.
+The SDN host must also provide Mininet, Open vSwitch, `curl`, `jq`, `tmux`, and
+passwordless sudo for the required OVS/Mininet commands.
 
-## 6. Commit by concern
+## 3. Run local verification
+
+From the repository root:
 
 ```bash
-git add configs src/schemas
-git commit -m "feat(schema): complete telemetry contracts and config"
-
-git add src/controller
-git commit -m "fix(telemetry): complete controller and switch telemetry"
-
-git add src/telemetry src/orchestrator
-git commit -m "feat(state): collect telemetry and validate coherent snapshots"
-
-git add tests scripts .github Makefile requirements-dev.txt pyproject.toml .gitignore README.md
-git commit -m "test(ci): add telemetry tests and SDN integration workflows"
+python3 -m compileall -q src tests
+python3 -m unittest discover -s tests/unit -v
 ```
 
-Before push, sync latest `dev` on the feature branch:
+The unit suite covers the capacity aggregator, capacity validator, workload
+generation, schemas, telemetry, and QoS argument validation. CI additionally
+runs Ruff and Mypy over `src/experiments` and the existing application modules.
+
+## 4. Run the existing SDN integration smoke test
+
+On a prepared self-hosted Linux SDN runner:
 
 ```bash
-git fetch origin
-git merge origin/dev
-make ci
-git push -u origin feat/telemetry-state
+./scripts/cleanup.sh
+./scripts/smoke_test.sh
 ```
 
-Open a PR from `feat/telemetry-state` to `dev` and ask the other developer to review it.
+The integration smoke test starts C1, C2, and the orchestrator, creates the
+2C4S topology, and verifies role initialization, telemetry, bidirectional
+migration, snapshots, and rollback. The GitHub workflow is
+`.github/workflows/integration.yml`.
+
+## 5. Run the capacity benchmark
+
+In separate terminals, start C1, C2, and the orchestrator, then run a focused
+case from a fourth terminal:
+
+```bash
+./scripts/start_c1.sh
+```
+
+```bash
+./scripts/start_c2.sh
+```
+
+```bash
+RUN_ID=capacity ./scripts/start_orchestrator.sh
+```
+
+From the repository root, after the services are ready:
+
+```bash
+sudo -E env PYTHONPATH="$PWD" python3 \
+	src/experiments/topologies/capacity_smoke_2c4s.py \
+	--controller c1 \
+	--rate 10 \
+	--repeat 1
+```
+
+Run the complete configured matrix only after the focused case passes:
+
+```bash
+sudo -E env PYTHONPATH="$PWD" python3 \
+	src/experiments/topologies/capacity_smoke_2c4s.py \
+	--controller all
+```
+
+The topology waits for both controllers to report all four switches before
+calling `/api/v1/init-roles`. The runner records workload, controller, switch,
+QoS, snapshot, and collector-error streams, then aggregates and validates the
+measurement window.
+
+For the manual tmux preflight, one-packet gate, output schema, validation
+thresholds, and cookie lifecycle, follow:
+
+```text
+docs/capacity-benchmark.md
+```
+
+## 6. Review outputs and cleanup
+
+Completed runs are written to `data/experiment_runs/`. Review at least:
+
+- `metadata.json` for topology counts and measurement timestamps;
+- `summary.json` for means, maxima, p95 values, and sample counts;
+- `validation.json` for validation errors and warnings;
+- `collector_errors.jsonl` for collector failures.
+
+Validation requires at least 80% workload/controller sample coverage, switch and
+snapshot samples, valid snapshots, non-zero controller rates, no collector
+errors, and the configured QoS success ratio.
+
+After a failed or interrupted SDN run:
+
+```bash
+./scripts/cleanup.sh
+```
+
+The capacity runner clears only experiment cookies `0x10`, `0x20`, and `0x30`;
+it preserves the table-miss cookie and verifies that benchmark flows expire
+after cooldown.
+
+## 7. Commit and pull request
+
+Use a focused commit message for the completed feature:
+
+```text
+feat(capacity): add safe 2C4S capacity benchmark
+```
+
+Before opening the pull request, run the local verification commands, review
+the diff, and update `.github/pull_request_template.md` with the actual checks
+that passed. Target the integration branch according to the repository's branch
+policy; do not force-push a branch shared with another developer.

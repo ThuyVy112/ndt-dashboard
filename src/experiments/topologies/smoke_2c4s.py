@@ -31,8 +31,8 @@ def main():
         link=TCLink,
         build=False,
     )
-    c1 = net.addController("c1", controller=RemoteController, ip="127.0.0.1", port=6653)
-    c2 = net.addController("c2", controller=RemoteController, ip="127.0.0.1", port=6654)
+    net.addController("c1", controller=RemoteController, ip="127.0.0.1", port=6653)
+    net.addController("c2", controller=RemoteController, ip="127.0.0.1", port=6654)
     net.build()
     net.start()
 
