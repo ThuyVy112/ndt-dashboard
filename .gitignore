@@ -1,44 +1,41 @@
+# Environment
 .env
+.venv/
+
+# Python
 __pycache__/
 *.py[cod]
-.venv/
+
+# Tool caches
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
-*.log
 
-data/raw/*
-!data/raw/.gitkeep
-data/snapshots/*
-!data/snapshots/.gitkeep
+# Logs
+*.log
 
 logs/ci/*
 !logs/ci/.gitkeep
-.env
-__pycache__/
-*.py[cod]
-.venv/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-*.log
 
+# Legacy telemetry
 data/raw/*
 !data/raw/.gitkeep
+
 data/snapshots/*
 !data/snapshots/.gitkeep
 
-# Capacity experiment runs
+# Experiment runs
 data/experiment_runs/*
 !data/experiment_runs/.gitkeep
 
-# Generated benchmark results
+# Capacity benchmark artifacts
 data/benchmarks/*
 !data/benchmarks/.gitkeep
 !data/benchmarks/reports/
+data/benchmarks/reports/*
 !data/benchmarks/reports/.gitkeep
 
-# Forecast datasets
+# Forecasting datasets
 data/forecasting/raw/*
 !data/forecasting/raw/.gitkeep
 
@@ -51,7 +48,7 @@ data/forecasting/splits/*
 data/forecasting/reports/*
 !data/forecasting/reports/.gitkeep
 
-# Outcome datasets
+# Post-migration outcome datasets
 data/outcome/raw/*
 !data/outcome/raw/.gitkeep
 
@@ -63,12 +60,3 @@ data/outcome/splits/*
 
 data/outcome/reports/*
 !data/outcome/reports/.gitkeep
-
-logs/ci/*
-!logs/ci/.gitkeep
-
-data/experiment_runs/*
-!data/experiment_runs/.gitkeep
-
-data/benchmarks/*
-!data/benchmarks/.gitkeep
