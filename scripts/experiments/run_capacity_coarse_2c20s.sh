@@ -163,7 +163,7 @@ check_existing_run() {
 check_git
 check_runtime
 
-sudo mn -c >/dev/null 2>&1 || true
+# sudo mn -c >/dev/null 2>&1 || true
 
 
 for rate in "${RATES[@]}"; do
