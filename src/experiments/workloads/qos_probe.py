@@ -47,82 +47,304 @@ def validate_args(args: argparse.Namespace) -> None:
     )
 
 
-def run_probe(args: argparse.Namespace) -> dict[str, Any]:
+def run_probe(
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+
     validate_args(args)
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    allocator = PortAllocator(args.source_port_start, args.source_port_end)
-    pacer = DeadlinePacer(args.rate)
-    total_probes = max(1, int(args.rate * args.duration))
+
+    args.output.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    allocator = PortAllocator(
+        args.source_port_start,
+        args.source_port_end,
+    )
+
+    pacer = DeadlinePacer(
+        args.rate
+    )
+
     start_ns = time.monotonic_ns()
+
+    end_ns = (
+        start_ns
+        + int(
+            args.duration
+            * 1_000_000_000
+        )
+    )
+
     attempted = 0
     succeeded = 0
+    sequence = 0
 
-    with JsonlWriter(args.output) as writer:
-        for sequence in range(total_probes):
-            schedule_lag_ms = pacer.wait_until(pacer.deadline_ns(start_ns, sequence))
-            source_port = allocator.next_port()
-            send_ns = time.monotonic_ns()
+    with JsonlWriter(
+        args.output
+    ) as writer:
+
+        while True:
+            scheduled_ns = (
+                pacer.deadline_ns(
+                    start_ns,
+                    sequence,
+                )
+            )
+
+            # Do not schedule probes outside
+            # the requested wall-clock window.
+            if scheduled_ns >= end_ns:
+                break
+
+            schedule_lag_ms = (
+                pacer.wait_until(
+                    scheduled_ns
+                )
+            )
+
+            now_ns = (
+                time.monotonic_ns()
+            )
+
+            if now_ns >= end_ns:
+                break
+
+            source_port = (
+                allocator.next_port()
+            )
+
+            send_ns = (
+                time.monotonic_ns()
+            )
+
             row: dict[str, Any] = {
-                "run_id": args.run_id,
-                "observed_at": datetime.now(timezone.utc).isoformat(),
-                "sequence": sequence,
-                "source_host": args.source_host,
-                "source_ip": args.source_ip,
-                "source_port": source_port,
-                "target_host": args.target_host,
-                "target_ip": args.target_ip,
-                "target_port": args.target_port,
-                "success": False,
-                "schedule_lag_ms": schedule_lag_ms,
-                "flow_setup_latency_ms": None,
-                "rtt_ms": None,
-                "error": None,
-                "clock_basis": "shared-kernel-monotonic",
-            }
-            attempted += 1
-            try:
-                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-                    sock.bind((args.source_ip, source_port))
-                    sock.settimeout(args.timeout)
-                    payload = {"sequence": sequence, "send_ns": send_ns}
-                    sock.sendto(
-                        json.dumps(payload, separators=(",", ":")).encode("utf-8"),
-                        (args.target_ip, args.target_port),
-                    )
-                    response_raw, _ = sock.recvfrom(65535)
-                    ack_ns = time.monotonic_ns()
-                response = json.loads(response_raw.decode("utf-8"))
+                "run_id":
+                    args.run_id,
 
-                if int(
-                    response["sequence"]
-                ) != sequence:
+                "observed_at":
+                    datetime.now(
+                        timezone.utc
+                    ).isoformat(),
+
+                "sequence":
+                    sequence,
+
+                "source_host":
+                    args.source_host,
+
+                "source_ip":
+                    args.source_ip,
+
+                "source_port":
+                    source_port,
+
+                "target_host":
+                    args.target_host,
+
+                "target_ip":
+                    args.target_ip,
+
+                "target_port":
+                    args.target_port,
+
+                "success":
+                    False,
+
+                "schedule_lag_ms":
+                    schedule_lag_ms,
+
+                "flow_setup_latency_ms":
+                    None,
+
+                "rtt_ms":
+                    None,
+
+                "error":
+                    None,
+
+                "clock_basis":
+                    "shared-kernel-monotonic",
+            }
+
+            attempted += 1
+
+            try:
+                remaining_seconds = max(
+                    0.001,
+                    (
+                        end_ns
+                        - time.monotonic_ns()
+                    )
+                    / 1_000_000_000.0,
+                )
+
+                effective_timeout = min(
+                    args.timeout,
+                    remaining_seconds,
+                )
+
+                with socket.socket(
+                    socket.AF_INET,
+                    socket.SOCK_DGRAM,
+                ) as sock:
+
+                    sock.bind(
+                        (
+                            args.source_ip,
+                            source_port,
+                        )
+                    )
+
+                    sock.settimeout(
+                        effective_timeout
+                    )
+
+                    payload = {
+                        "sequence":
+                            sequence,
+
+                        "send_ns":
+                            send_ns,
+                    }
+
+                    sock.sendto(
+                        json.dumps(
+                            payload,
+                            separators=(
+                                ",",
+                                ":",
+                            ),
+                        ).encode(
+                            "utf-8"
+                        ),
+                        (
+                            args.target_ip,
+                            args.target_port,
+                        ),
+                    )
+
+                    response_raw, _ = (
+                        sock.recvfrom(
+                            65535
+                        )
+                    )
+
+                    ack_ns = (
+                        time.monotonic_ns()
+                    )
+
+                response = json.loads(
+                    response_raw.decode(
+                        "utf-8"
+                    )
+                )
+
+                if (
+                    int(
+                        response[
+                            "sequence"
+                        ]
+                    )
+                    != sequence
+                ):
                     raise ValueError(
                         "QoS response sequence mismatch"
                     )
 
-                if int(
-                    response["send_ns"]
-                ) != send_ns:
+                if (
+                    int(
+                        response[
+                            "send_ns"
+                        ]
+                    )
+                    != send_ns
+                ):
                     raise ValueError(
                         "QoS response send_ns mismatch"
                     )
-                
-                target_received_ns = int(response["target_received_ns"])
-                row["flow_setup_latency_ms"] = max(0.0, (target_received_ns - send_ns) / 1_000_000.0)
-                row["rtt_ms"] = max(0.0, (ack_ns - send_ns) / 1_000_000.0)
+
+                target_received_ns = int(
+                    response[
+                        "target_received_ns"
+                    ]
+                )
+
+                row[
+                    "flow_setup_latency_ms"
+                ] = max(
+                    0.0,
+                    (
+                        target_received_ns
+                        - send_ns
+                    )
+                    / 1_000_000.0,
+                )
+
+                row[
+                    "rtt_ms"
+                ] = max(
+                    0.0,
+                    (
+                        ack_ns
+                        - send_ns
+                    )
+                    / 1_000_000.0,
+                )
+
                 row["success"] = True
                 succeeded += 1
-            except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
+
+            except (
+                OSError,
+                ValueError,
+                KeyError,
+                TypeError,
+                json.JSONDecodeError,
+            ) as exc:
+
                 row["error"] = str(exc)
-            writer.write(row)
+
+            writer.write(
+                row
+            )
+
+            sequence += 1
+
+    elapsed_seconds = (
+        time.monotonic_ns()
+        - start_ns
+    ) / 1_000_000_000.0
 
     return {
-        "status": "QOS_PROBE_DONE",
-        "run_id": args.run_id,
-        "attempted": attempted,
-        "succeeded": succeeded,
-        "failed": attempted - succeeded,
-        "success_ratio": succeeded / attempted if attempted else 0.0,
+        "status":
+            "QOS_PROBE_DONE",
+
+        "run_id":
+            args.run_id,
+
+        "attempted":
+            attempted,
+
+        "succeeded":
+            succeeded,
+
+        "failed":
+            attempted - succeeded,
+
+        "success_ratio":
+            (
+                succeeded / attempted
+                if attempted
+                else 0.0
+            ),
+
+        "requested_duration_seconds":
+            args.duration,
+
+        "actual_elapsed_seconds":
+            elapsed_seconds,
     }
 
 

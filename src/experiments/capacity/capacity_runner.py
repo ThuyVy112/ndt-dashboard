@@ -329,14 +329,38 @@ def run_capacity_experiment(
         time.sleep(measurement)
         metadata.measurement_ended_at = utc_now()
         write_json(metadata_path, metadata.to_dict())
+
         workload_process.wait(timeout=10.0)
+
         if workload_process.returncode != 0:
-            raise RuntimeError(f"workload generator failed with return code {workload_process.returncode}")
+            raise RuntimeError(
+                "workload generator failed with "
+                f"return code {workload_process.returncode}"
+            )
+
         if qos_process is not None:
-            qos_process.wait(timeout=10.0)
+            qos_wait_timeout = max(
+                10.0,
+                float(
+                    qos_config[
+                        "response_timeout_seconds"
+                    ]
+                )
+                + 5.0,
+            )
+
+            qos_process.wait(
+                timeout=qos_wait_timeout
+            )
+
             if qos_process.returncode != 0:
-                raise RuntimeError(f"QoS probe failed with return code {qos_process.returncode}")
+                raise RuntimeError(
+                    "QoS probe failed with "
+                    f"return code {qos_process.returncode}"
+                )
+
         time.sleep(cooldown)
+
         wait_for_cookie_absent(
             switches=scenario["path_switches"],
             cookie=COOKIE_BENCHMARK,
