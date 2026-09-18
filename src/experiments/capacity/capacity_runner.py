@@ -59,7 +59,7 @@ def validate_runtime_state(config: Dict[str, Any], controller_id: str) -> Dict[s
     return state
 
 
-def wait_for_valid_snapshot(orchestrator_url: str, timeout_seconds: float = 15.0) -> dict:
+def wait_for_valid_snapshot(orchestrator_url: str, timeout_seconds: float = 30.0) -> dict:
     deadline = time.monotonic() + timeout_seconds
     last_reason = "no valid snapshot available"
     while time.monotonic() < deadline:
@@ -107,6 +107,7 @@ def count_cookie_flows(switch_name: str, cookie: str) -> int:
         text=True,
         capture_output=True,
     )
+    # Match the requested cookie exactly at the cookie field.
     needle = f"cookie={cookie}"
     return sum(needle in line for line in result.stdout.splitlines())
 
@@ -117,19 +118,50 @@ def wait_for_cookie_absent(
     timeout_seconds: float,
 ) -> None:
     switch_list = list(switches)
-    deadline = time.monotonic() + timeout_seconds
+
+    deadline = (
+        time.monotonic()
+        + timeout_seconds
+    )
+
+    remaining: dict[str, int] = {}
 
     while time.monotonic() < deadline:
         remaining = {
-            switch_name: count_cookie_flows(switch_name, cookie)
-            for switch_name in switch_list
+            switch_name:
+                count_cookie_flows(
+                    switch_name,
+                    cookie,
+                )
+            for switch_name
+            in switch_list
         }
-        if all(count == 0 for count in remaining.values()):
+
+        if all(
+            count == 0
+            for count in remaining.values()
+        ):
             return
+
         time.sleep(0.25)
 
-    raise RuntimeError("benchmark flows did not expire")
+    raise RuntimeError(
+        f"cookie {cookie} flows still present "
+        f"after cleanup: {remaining}"
+    )
 
+def wait_for_experiment_flows_absent(
+    switches: Iterable[str],
+    timeout_seconds: float,
+) -> None:
+    switch_list = list(switches)
+
+    for cookie in EXPERIMENT_COOKIES:
+        wait_for_cookie_absent(
+            switches=switch_list,
+            cookie=cookie,
+            timeout_seconds=timeout_seconds,
+        )
 
 def warmup_hosts(source: Any, target: Any) -> None:
     source_result = source.cmd(f"ping -c 2 {target.IP()}")
@@ -231,6 +263,13 @@ def run_capacity_experiment(
         wait_for_valid_snapshot(str(runtime["orchestrator_url"]))
         warmup_hosts(source, target)
         clear_experiment_flows(scenario["path_switches"])
+
+        wait_for_experiment_flows_absent(
+                switches=scenario[
+                    "path_switches"
+                ],
+                timeout_seconds=5.0,
+            )
 
         logs = run_dir / "logs"
         sink_log = (logs / "workload_sink.log").open("w", encoding="utf-8")
@@ -361,12 +400,32 @@ def run_capacity_experiment(
 
         time.sleep(cooldown)
 
-        wait_for_cookie_absent(
-            switches=scenario["path_switches"],
-            cookie=COOKIE_BENCHMARK,
-            timeout_seconds=3.0,
+    # Explicit cleanup after the measurement/cooldown window.
+        # Natural idle-timeout behavior was validated separately.
+        # Capacity runs require deterministic isolation between runs.
+        clear_experiment_flows(
+            scenario["path_switches"]
         )
+
+        cleanup_timeout = max(
+        5.0,
+        float(
+        workload_config[
+        "flow_idle_timeout_seconds"
+        ]
+        )
+        + 2.0,
+        )
+
+        wait_for_experiment_flows_absent(
+        switches=scenario[
+                "path_switches"
+            ],
+            timeout_seconds=cleanup_timeout,
+        )
+
         metadata.ended_at = utc_now()
+
         write_json(metadata_path, metadata.to_dict())
         collector.stop()
         collector = None

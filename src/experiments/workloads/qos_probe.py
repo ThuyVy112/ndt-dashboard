@@ -201,6 +201,10 @@ def run_probe(
                         effective_timeout
                     )
 
+                    send_ns = (
+                        time.monotonic_ns()
+                    )
+
                     payload = {
                         "sequence":
                             sequence,
@@ -301,7 +305,7 @@ def run_probe(
                 ValueError,
                 KeyError,
                 TypeError,
-                json.JSONDecodeError,
+                #json.JSONDecodeError,
             ) as exc:
 
                 row["error"] = str(exc)

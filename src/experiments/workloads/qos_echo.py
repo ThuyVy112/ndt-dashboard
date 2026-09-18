@@ -16,7 +16,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> None:
     args = build_parser().parse_args()
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        #sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.bind((args.bind_ip, args.port))
         print(f"QOS_ECHO_READY {args.bind_ip}:{args.port}", flush=True)
         while True:
@@ -57,7 +57,7 @@ def main() -> None:
                 KeyError,
                 TypeError,
                 ValueError,
-                UnicodeDecodeError,
+                #UnicodeDecodeError,
             ):
                 continue # delete json.JSONDecodeError from except clause because it is a subclass of ValueError
 
