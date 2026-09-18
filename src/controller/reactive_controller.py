@@ -18,17 +18,21 @@ from src.controller.telemetry_agent import TelemetryAgent
 
 REST_INSTANCE = "ndt_controller"
 BENCHMARK_UDP_PORT = 9000
+QOS_UDP_PORT = 9001
 COOKIE_TABLE_MISS = 0x0
 COOKIE_REACTIVE = 0x10
 COOKIE_VERIFICATION = 0x20
 COOKIE_BENCHMARK = 0x30
+COOKIE_QOS = 0x40
 
 PRIORITY_TABLE_MISS = 0
 PRIORITY_REACTIVE = 10
 PRIORITY_BENCHMARK = 20
+PRIORITY_QOS = 20
 
 IDLE_TIMEOUT_BENCHMARK = 5
 IDLE_TIMEOUT_REACTIVE = 30
+IDLE_TIMEOUT_QOS = 30
 
 def json_response(payload, status=200):
     return Response(
@@ -91,6 +95,88 @@ class ReactiveController(app_manager.RyuApp):
         )
 
         # =========================================================
+        # Capacity benchmark configuration
+        # =========================================================
+
+        self.benchmark_enabled = (
+            os.getenv(
+                "NDT_BENCHMARK_ENABLED",
+                "0",
+            ).strip().lower()
+            in {
+                "1",
+                "true",
+                "yes",
+                "on",
+            }
+        )
+
+        try:
+            self.benchmark_udp_port = int(
+                os.getenv(
+                    "NDT_BENCHMARK_UDP_PORT",
+                    str(BENCHMARK_UDP_PORT),
+                )
+            )
+        except ValueError as exc:
+            raise ValueError(
+                "NDT_BENCHMARK_UDP_PORT "
+                "must be an integer"
+            ) from exc
+
+        if not (
+            1
+            <= self.benchmark_udp_port
+            <= 65535
+        ):
+            raise ValueError(
+                "NDT_BENCHMARK_UDP_PORT "
+                "must be in [1, 65535]"
+            )
+
+        try:
+            self.qos_udp_port = int(
+                os.getenv(
+                    "NDT_QOS_UDP_PORT",
+                    str(QOS_UDP_PORT),
+                )
+            )
+        except ValueError as exc:
+            raise ValueError(
+                "NDT_QOS_UDP_PORT "
+                "must be an integer"
+            ) from exc
+
+        if not (
+            1
+            <= self.qos_udp_port
+            <= 65535
+        ):
+            raise ValueError(
+                "NDT_QOS_UDP_PORT "
+                "must be in [1, 65535]"
+            )
+
+        try:
+            self.benchmark_idle_timeout = int(
+                os.getenv(
+                    "NDT_BENCHMARK_FLOW_IDLE_TIMEOUT",
+                    str(IDLE_TIMEOUT_BENCHMARK),
+                )
+            )
+        except ValueError as exc:
+            raise ValueError(
+                "NDT_BENCHMARK_FLOW_IDLE_TIMEOUT "
+                "must be an integer"
+            ) from exc
+
+        if self.benchmark_idle_timeout <= 0:
+            raise ValueError(
+                "NDT_BENCHMARK_FLOW_IDLE_TIMEOUT "
+                "must be > 0"
+            )
+
+        # =========================================================
         # REST API
         # =========================================================
 
@@ -118,13 +204,19 @@ class ReactiveController(app_manager.RyuApp):
         self.logger.info(
             "CONTROLLER_INITIALIZED "
             "controller=%s "
+            "benchmark_enabled=%s "
             "benchmark_udp_port=%s "
+            "qos_udp_port=%s "
             "benchmark_idle_timeout=%ss "
-            "reactive_idle_timeout=%ss",
+            "reactive_idle_timeout=%ss "
+            "qos_idle_timeout=%ss",
             self.controller_id,
-            BENCHMARK_UDP_PORT,
-            IDLE_TIMEOUT_BENCHMARK,
+            self.benchmark_enabled,
+            self.benchmark_udp_port,
+            self.qos_udp_port,
+            self.benchmark_idle_timeout,
             IDLE_TIMEOUT_REACTIVE,
+            IDLE_TIMEOUT_QOS,
         )
 
     def _telemetry_loop(self):
@@ -241,20 +333,30 @@ class ReactiveController(app_manager.RyuApp):
         # 1. Detect UDP benchmark traffic
         ip_pkt = pkt.get_protocol(ipv4.ipv4)
         udp_pkt = pkt.get_protocol(udp.udp)
+
         is_benchmark = (
             ip_pkt is not None
             and udp_pkt is not None
             and udp_pkt.dst_port == BENCHMARK_UDP_PORT
         )
 
+        is_qos = (
+            self.benchmark_enabled
+            and ip_pkt is not None
+            and udp_pkt is not None
+            and udp_pkt.dst_port
+            == self.qos_udp_port
+        )
+
         self.logger.info(
-            "BENCHMARK_CLASSIFY "
+            "EXPERIMENT_CLASSIFY "
             "controller=%s dpid=%016x "
             "in_port=%s src=%s dst=%s "
             "eth_type=%s "
             "ip_src=%s ip_dst=%s ip_proto=%s "
             "udp_src=%s udp_dst=%s "
             "is_benchmark=%s",
+            "is_qos=%s",
             self.controller_id,
             dpid,
             in_port,
@@ -267,6 +369,7 @@ class ReactiveController(app_manager.RyuApp):
             getattr(udp_pkt, "src_port", None),
             getattr(udp_pkt, "dst_port", None),
             is_benchmark,
+            is_qos,
         )
 
         # 2. MAC learning
@@ -277,36 +380,82 @@ class ReactiveController(app_manager.RyuApp):
 
         # 3. Install flow only when destination is known
         if out_port != ofp.OFPP_FLOOD:
-            if is_benchmark:
+            if is_benchmark or is_qos:
                 match = parser.OFPMatch(
-                    in_port=in_port, eth_type=ether_types.ETH_TYPE_IP,
-                    ipv4_src=ip_pkt.src, ipv4_dst=ip_pkt.dst,
-                    ip_proto=17, udp_src=udp_pkt.src_port, udp_dst=udp_pkt.dst_port)
-                priority = PRIORITY_BENCHMARK
-                cookie = COOKIE_BENCHMARK
-                idle_timeout = IDLE_TIMEOUT_BENCHMARK
+                    in_port=in_port,
+                    eth_type=(
+                        ether_types.ETH_TYPE_IP
+                    ),
+                    ipv4_src=ip_pkt.src,
+                    ipv4_dst=ip_pkt.dst,
+                    ip_proto=17,
+                    udp_src=udp_pkt.src_port,
+                    udp_dst=udp_pkt.dst_port,
+                )
+
+                if is_benchmark:
+                    priority = (
+                        PRIORITY_BENCHMARK
+                    )
+
+                    cookie = (
+                        COOKIE_BENCHMARK
+                    )
+
+                    idle_timeout = (
+                        self.benchmark_idle_timeout
+                    )
+
+                else:
+                    priority = (
+                        PRIORITY_QOS
+                    )
+
+                    cookie = (
+                        COOKIE_QOS
+                    )
+
+                    idle_timeout = (
+                        IDLE_TIMEOUT_QOS
+                    )
+
             else:
                 reactive_match = {
-                    "in_port": in_port,
-                    "eth_src": src,
-                    "eth_dst": dst,
-                    "eth_type": eth.ethertype,
+                    "in_port":
+                        in_port,
+
+                    "eth_src":
+                        src,
+
+                    "eth_dst":
+                        dst,
+
+                    "eth_type":
+                        eth.ethertype,
                 }
 
                 if ip_pkt is not None:
                     reactive_match.update(
                         {
-                            "ipv4_src": ip_pkt.src,
-                            "ipv4_dst": ip_pkt.dst,
-                            "ip_proto": ip_pkt.proto,
+                            "ipv4_src":
+                                ip_pkt.src,
+
+                            "ipv4_dst":
+                                ip_pkt.dst,
+
+                            "ip_proto":
+                                ip_pkt.proto,
                         }
                     )
 
                     if udp_pkt is not None:
                         reactive_match.update(
                             {
-                                "udp_src": udp_pkt.src_port,
-                                "udp_dst": udp_pkt.dst_port,
+                                "udp_src":
+                                    udp_pkt.src_port,
+
+                                "udp_dst":
+                                    udp_pkt.dst_port,
                             }
                         )
 
@@ -314,9 +463,17 @@ class ReactiveController(app_manager.RyuApp):
                     **reactive_match
                 )
 
-                priority = PRIORITY_REACTIVE
-                cookie = COOKIE_REACTIVE
-                idle_timeout = IDLE_TIMEOUT_REACTIVE
+                priority = (
+                    PRIORITY_REACTIVE
+                )
+
+                cookie = (
+                    COOKIE_REACTIVE
+                )
+
+                idle_timeout = (
+                    IDLE_TIMEOUT_REACTIVE
+                )
 
             if msg.buffer_id != ofp.OFP_NO_BUFFER:
                 self.add_flow(dp, priority, match, actions, buffer_id=msg.buffer_id, idle_timeout=idle_timeout, cookie=cookie)
