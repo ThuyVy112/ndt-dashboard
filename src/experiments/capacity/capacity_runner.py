@@ -189,6 +189,26 @@ def ensure_process_running(process: Any, name: str) -> None:
 def process_command(module: str, *arguments: str) -> list[str]:
     return ["python3", "-m", module, *arguments]
 
+def experiment_flow_counts(
+    switches: Iterable[str],
+) -> dict[str, dict[str, int]]:
+    switch_list = list(
+        switches
+    )
+
+    return {
+        cookie: {
+            switch_name:
+                count_cookie_flows(
+                    switch_name,
+                    cookie,
+                )
+            for switch_name
+            in switch_list
+        }
+        for cookie
+        in EXPERIMENT_COOKIES
+    }
 
 def run_capacity_experiment(
     net: Any,
@@ -224,7 +244,6 @@ def run_capacity_experiment(
     collector = None
     processes: list[Any] = []
     streams: list[Any] = []
-    completed = False
     try:
         runtime_state = validate_runtime_state(config, controller_id)
         ownership = runtime_state["ownership"]
@@ -400,34 +419,60 @@ def run_capacity_experiment(
 
         time.sleep(cooldown)
 
-    # Explicit cleanup after the measurement/cooldown window.
-        # Natural idle-timeout behavior was validated separately.
-        # Capacity runs require deterministic isolation between runs.
-        clear_experiment_flows(
-            scenario["path_switches"]
+        residual_flows = (
+            experiment_flow_counts(
+                scenario[
+                    "path_switches"
+                ]
+            )
         )
 
-        cleanup_timeout = max(
-        5.0,
-        float(
-        workload_config[
-        "flow_idle_timeout_seconds"
-        ]
-        )
-        + 2.0,
-        )
+        write_json(
+            run_dir
+            / "post_run_flows.json",
+            {
+                "run_id":
+                    run_id,
 
-        wait_for_experiment_flows_absent(
-        switches=scenario[
-                "path_switches"
-            ],
-            timeout_seconds=cleanup_timeout,
+                "observed_at":
+                    utc_now().isoformat(),
+
+                "flows":
+                    residual_flows,
+            },
         )
 
         metadata.ended_at = utc_now()
+        write_json(
+            metadata_path,
+            metadata.to_dict(),
+        )
+
+        collector = None
+
+        post_state = validate_runtime_state(
+            config,
+            controller_id,
+        )
+
+        if any(
+            post_state["ownership"].get(
+                switch
+            )
+            != controller_id
+            for switch
+            in scenario["path_switches"]
+        ):
+            raise RuntimeError(
+                "ownership changed during "
+                "capacity experiment"
+            )
+
+        summary = aggregate_run(
+            run_dir
+        )
 
         write_json(metadata_path, metadata.to_dict())
-        collector.stop()
         collector = None
         post_state = validate_runtime_state(config, controller_id)
         if any(post_state["ownership"].get(switch) != controller_id for switch in scenario["path_switches"]):
@@ -438,7 +483,6 @@ def run_capacity_experiment(
         write_json(run_dir / "validation.json", validation)
         if not validation["valid"]:
             raise RuntimeError("capacity run validation failed: " + ", ".join(validation["errors"]))
-        completed = True
         return run_dir
     except Exception as exc:
         write_json(run_dir / "failure.json", {
@@ -451,13 +495,27 @@ def run_capacity_experiment(
     finally:
         if collector is not None:
             collector.stop()
+
         for process in processes:
-            terminate_process(process)
+            terminate_process(
+                process
+            )
+
         for stream in streams:
             stream.close()
-        if not completed:
-            try:
-                clear_experiment_flows(scenario["path_switches"])
-            except Exception:
-                pass
-        restore_sudo_owner(run_dir)
+
+        # Cleanup is best-effort only.
+        # Measurement validity must not depend
+        # on post-run flow expiry because an
+        # overloaded controller may still be
+        # draining queued Packet-In events.
+        try:
+            clear_experiment_flows(
+                scenario["path_switches"]
+            )
+        except Exception:
+            pass
+
+        restore_sudo_owner(
+            run_dir
+        )
