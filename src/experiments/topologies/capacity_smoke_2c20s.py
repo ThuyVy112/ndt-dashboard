@@ -110,7 +110,7 @@ def build_parser() -> argparse.ArgumentParser:
 def wait_for_controller_connections(
     controller_urls: dict[str, str],
     expected_switch_count: int = 20,
-    timeout_seconds: float = 45.0,
+    timeout_seconds: float = 60.0,
 ) -> None:
     deadline = (
         time.monotonic()
