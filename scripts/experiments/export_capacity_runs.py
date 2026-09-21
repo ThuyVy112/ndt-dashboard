@@ -14,8 +14,9 @@ OUTPUT_PATH = Path(
     "data/benchmarks/capacity_runs.csv"
 )
 
-PATTERN = (
-    "capacity-2c20s-coarse-*/summary.json"
+PATTERNS = (
+    "capacity-2c20s-coarse-*/summary.json",
+    "capacity-2c20s-fine-*/summary.json",
 )
 
 
@@ -32,9 +33,15 @@ def load_json(
 def main() -> None:
     rows: list[dict[str, Any]] = []
 
-    for summary_path in sorted(
-        RUN_ROOT.glob(PATTERN)
-    ):
+    summary_paths = sorted(
+        {
+            path
+            for pattern in PATTERNS
+            for path in RUN_ROOT.glob(pattern)
+        }
+    )
+
+    for summary_path in summary_paths:
         run_dir = (
             summary_path.parent
         )
@@ -227,7 +234,7 @@ def main() -> None:
 
     if not rows:
         print(
-            "No coarse capacity runs found."
+            "No capacity runs found."
         )
         return
 

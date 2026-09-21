@@ -15,6 +15,10 @@ OUTPUT_PATH = Path(
     "capacity_coarse_summary.csv"
 )
 
+COARSE_RUN_PREFIX = (
+    "capacity-2c20s-coarse-"
+)
+
 
 def mean(
     rows: list[dict[str, str]],
@@ -36,10 +40,26 @@ def main() -> None:
         newline="",
         encoding="utf-8",
     ) as handle:
-        rows = list(
+        all_rows = list(
             csv.DictReader(handle)
         )
 
+    rows = [
+       row
+       for row in all_rows
+       if row.get(
+           "run_id",
+           "",
+       ).startswith(
+           COARSE_RUN_PREFIX
+       )
+    ]
+
+    if not rows:
+        raise SystemExit(
+            "no coarse capacity runs found in "
+            "capacity_runs.csv"
+        ) 
 
     groups: dict[
         tuple[str, float],
