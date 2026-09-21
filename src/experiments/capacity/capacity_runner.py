@@ -59,7 +59,7 @@ def validate_runtime_state(config: Dict[str, Any], controller_id: str) -> Dict[s
     return state
 
 
-def wait_for_valid_snapshot(orchestrator_url: str, timeout_seconds: float = 15.0) -> dict:
+def wait_for_valid_snapshot(orchestrator_url: str, timeout_seconds: float = 30.0) -> dict:
     deadline = time.monotonic() + timeout_seconds
     last_reason = "no valid snapshot available"
     while time.monotonic() < deadline:
@@ -107,6 +107,7 @@ def count_cookie_flows(switch_name: str, cookie: str) -> int:
         text=True,
         capture_output=True,
     )
+    # Match the requested cookie exactly at the cookie field.
     needle = f"cookie={cookie}"
     return sum(needle in line for line in result.stdout.splitlines())
 
@@ -117,19 +118,50 @@ def wait_for_cookie_absent(
     timeout_seconds: float,
 ) -> None:
     switch_list = list(switches)
-    deadline = time.monotonic() + timeout_seconds
+
+    deadline = (
+        time.monotonic()
+        + timeout_seconds
+    )
+
+    remaining: dict[str, int] = {}
 
     while time.monotonic() < deadline:
         remaining = {
-            switch_name: count_cookie_flows(switch_name, cookie)
-            for switch_name in switch_list
+            switch_name:
+                count_cookie_flows(
+                    switch_name,
+                    cookie,
+                )
+            for switch_name
+            in switch_list
         }
-        if all(count == 0 for count in remaining.values()):
+
+        if all(
+            count == 0
+            for count in remaining.values()
+        ):
             return
+
         time.sleep(0.25)
 
-    raise RuntimeError("benchmark flows did not expire")
+    raise RuntimeError(
+        f"cookie {cookie} flows still present "
+        f"after cleanup: {remaining}"
+    )
 
+def wait_for_experiment_flows_absent(
+    switches: Iterable[str],
+    timeout_seconds: float,
+) -> None:
+    switch_list = list(switches)
+
+    for cookie in EXPERIMENT_COOKIES:
+        wait_for_cookie_absent(
+            switches=switch_list,
+            cookie=cookie,
+            timeout_seconds=timeout_seconds,
+        )
 
 def warmup_hosts(source: Any, target: Any) -> None:
     source_result = source.cmd(f"ping -c 2 {target.IP()}")
@@ -157,6 +189,26 @@ def ensure_process_running(process: Any, name: str) -> None:
 def process_command(module: str, *arguments: str) -> list[str]:
     return ["python3", "-m", module, *arguments]
 
+def experiment_flow_counts(
+    switches: Iterable[str],
+) -> dict[str, dict[str, int]]:
+    switch_list = list(
+        switches
+    )
+
+    return {
+        cookie: {
+            switch_name:
+                count_cookie_flows(
+                    switch_name,
+                    cookie,
+                )
+            for switch_name
+            in switch_list
+        }
+        for cookie
+        in EXPERIMENT_COOKIES
+    }
 
 def run_capacity_experiment(
     net: Any,
@@ -192,7 +244,6 @@ def run_capacity_experiment(
     collector = None
     processes: list[Any] = []
     streams: list[Any] = []
-    completed = False
     try:
         runtime_state = validate_runtime_state(config, controller_id)
         ownership = runtime_state["ownership"]
@@ -231,6 +282,13 @@ def run_capacity_experiment(
         wait_for_valid_snapshot(str(runtime["orchestrator_url"]))
         warmup_hosts(source, target)
         clear_experiment_flows(scenario["path_switches"])
+
+        wait_for_experiment_flows_absent(
+                switches=scenario[
+                    "path_switches"
+                ],
+                timeout_seconds=5.0,
+            )
 
         logs = run_dir / "logs"
         sink_log = (logs / "workload_sink.log").open("w", encoding="utf-8")
@@ -329,22 +387,92 @@ def run_capacity_experiment(
         time.sleep(measurement)
         metadata.measurement_ended_at = utc_now()
         write_json(metadata_path, metadata.to_dict())
+
         workload_process.wait(timeout=10.0)
+
         if workload_process.returncode != 0:
-            raise RuntimeError(f"workload generator failed with return code {workload_process.returncode}")
+            raise RuntimeError(
+                "workload generator failed with "
+                f"return code {workload_process.returncode}"
+            )
+
         if qos_process is not None:
-            qos_process.wait(timeout=10.0)
+            qos_wait_timeout = max(
+                10.0,
+                float(
+                    qos_config[
+                        "response_timeout_seconds"
+                    ]
+                )
+                + 5.0,
+            )
+
+            qos_process.wait(
+                timeout=qos_wait_timeout
+            )
+
             if qos_process.returncode != 0:
-                raise RuntimeError(f"QoS probe failed with return code {qos_process.returncode}")
+                raise RuntimeError(
+                    "QoS probe failed with "
+                    f"return code {qos_process.returncode}"
+                )
+
         time.sleep(cooldown)
-        wait_for_cookie_absent(
-            switches=scenario["path_switches"],
-            cookie=COOKIE_BENCHMARK,
-            timeout_seconds=3.0,
+
+        residual_flows = (
+            experiment_flow_counts(
+                scenario[
+                    "path_switches"
+                ]
+            )
         )
+
+        write_json(
+            run_dir
+            / "post_run_flows.json",
+            {
+                "run_id":
+                    run_id,
+
+                "observed_at":
+                    utc_now().isoformat(),
+
+                "flows":
+                    residual_flows,
+            },
+        )
+
         metadata.ended_at = utc_now()
+        write_json(
+            metadata_path,
+            metadata.to_dict(),
+        )
+
+        collector = None
+
+        post_state = validate_runtime_state(
+            config,
+            controller_id,
+        )
+
+        if any(
+            post_state["ownership"].get(
+                switch
+            )
+            != controller_id
+            for switch
+            in scenario["path_switches"]
+        ):
+            raise RuntimeError(
+                "ownership changed during "
+                "capacity experiment"
+            )
+
+        summary = aggregate_run(
+            run_dir
+        )
+
         write_json(metadata_path, metadata.to_dict())
-        collector.stop()
         collector = None
         post_state = validate_runtime_state(config, controller_id)
         if any(post_state["ownership"].get(switch) != controller_id for switch in scenario["path_switches"]):
@@ -355,7 +483,6 @@ def run_capacity_experiment(
         write_json(run_dir / "validation.json", validation)
         if not validation["valid"]:
             raise RuntimeError("capacity run validation failed: " + ", ".join(validation["errors"]))
-        completed = True
         return run_dir
     except Exception as exc:
         write_json(run_dir / "failure.json", {
@@ -368,13 +495,27 @@ def run_capacity_experiment(
     finally:
         if collector is not None:
             collector.stop()
+
         for process in processes:
-            terminate_process(process)
+            terminate_process(
+                process
+            )
+
         for stream in streams:
             stream.close()
-        if not completed:
-            try:
-                clear_experiment_flows(scenario["path_switches"])
-            except Exception:
-                pass
-        restore_sudo_owner(run_dir)
+
+        # Cleanup is best-effort only.
+        # Measurement validity must not depend
+        # on post-run flow expiry because an
+        # overloaded controller may still be
+        # draining queued Packet-In events.
+        try:
+            clear_experiment_flows(
+                scenario["path_switches"]
+            )
+        except Exception:
+            pass
+
+        restore_sudo_owner(
+            run_dir
+        )

@@ -1,9 +1,11 @@
 schema_version: "1.0"
 
+
 experiment:
-  type: capacity-smoke
-  topology: smoke_2c4s
+  type: capacity-2c20s-fine
+  topology: capacity_2c20s
   output_root: data/experiment_runs
+
 
 runtime:
   orchestrator_url: "http://127.0.0.1:9000"
@@ -12,76 +14,120 @@ runtime:
     c1: "http://127.0.0.1:8081"
     c2: "http://127.0.0.1:8082"
 
+
 scenarios:
+
   c1:
     target_controller: c1
+
     source_host: h1
     source_ip: "10.0.0.1"
-    target_host: h2
-    target_ip: "10.0.0.2"
+
+    target_host: h10
+    target_ip: "10.0.0.10"
 
     path_switches:
       - s1
       - s2
+      - s3
+      - s4
+      - s5
+      - s6
+      - s7
+      - s8
+      - s9
+      - s10
+
 
   c2:
     target_controller: c2
-    source_host: h3
-    source_ip: "10.0.0.3"
-    target_host: h4
-    target_ip: "10.0.0.4"
+
+    source_host: h11
+    source_ip: "10.0.0.11"
+
+    target_host: h20
+    target_ip: "10.0.0.20"
 
     path_switches:
-      - s3
-      - s4
+      - s11
+      - s12
+      - s13
+      - s14
+      - s15
+      - s16
+      - s17
+      - s18
+      - s19
+      - s20
+
 
 workload:
   protocol: udp
+
   target_port: 9000
+
   pattern: stable
 
   sample_interval_seconds: 1.0
 
   rates_fps:
-    - 10
-    - 20
-    - 50
+    - 60
+    - 70
+    - 80
+    - 90
     - 100
+    - 110
+    - 120
+    - 130
+    - 140
+    - 150
+    - 160
 
   source_port_start: 12000
   source_port_end: 65000
 
   flow_idle_timeout_seconds: 5.0
+
   port_reuse_safety_factor: 2.0
 
-timing:
-  warmup_seconds: 5
-  measurement_seconds: 20
-  cooldown_seconds: 5
 
-repeats: 2
+timing:
+  warmup_seconds: 20
+  measurement_seconds: 60
+  cooldown_seconds: 20
+
+
+repeats: 5
+
 
 qos_probe:
   enabled: true
 
   target_port: 9001
-  rate_per_second: 2.0
+
+  rate_per_second: 1.0
 
   source_port_start: 2000
   source_port_end: 10000
 
   flow_idle_timeout_seconds: 30.0
-  response_timeout_seconds: 0.4
+
+  response_timeout_seconds: 0.8
+
 
 telemetry:
   interval_seconds: 1.0
 
+
 migration:
   enabled: false
 
+
 validation:
-  smoke_mode: true
+  smoke_mode: false # smoke (qos < 0.95 --> ERROR) # capacity smoke: false (qos decrease)
 
   emitted_rate_tolerance_ratio: 0.10
+
   max_send_error_ratio: 0.01
+
   min_qos_success_ratio: 0.95

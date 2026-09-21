@@ -615,6 +615,21 @@ def validate_capacity_config(
                 "must be > 0"
             )
 
+        qos_period_seconds = (
+            1.0 / qos_rate
+        )
+
+        if (
+            qos_timeout
+            >= qos_period_seconds
+        ):
+            raise ValueError(
+                "qos_probe."
+                "response_timeout_seconds "
+                "must be smaller than "
+                "the probe period"
+            )
+
     # =========================================================
     # 9. Telemetry
     # =========================================================
