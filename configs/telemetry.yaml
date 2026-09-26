@@ -2,5 +2,9 @@ poll_interval_seconds: 1.0
 request_timeout_seconds: 1.0
 snapshot_interval_seconds: 5.0
 freshness_max_age_ms: 2500
+twin_quality:
+  twinning_window_seconds: 60
+  min_twinning_rate: 0.95
+  min_completeness_ratio: 1.0
 raw_data_dir: "data/raw"
 snapshot_data_dir: "data/snapshots"
