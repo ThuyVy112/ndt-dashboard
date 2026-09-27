@@ -13,6 +13,7 @@ class CurrentStateStore:
         self._runtime_states: dict[str, dict[str, Any]] = {}
         self._errors: dict[str, str] = {}
         self._latest_snapshot = None
+        self._twin_state = None
         self._lock = RLock()
 
     def update_collection(self, controller_id, controller, switches, runtime_state):
@@ -50,6 +51,14 @@ class CurrentStateStore:
     def snapshot_dict(self):
         with self._lock:
             return self._latest_snapshot.to_dict() if self._latest_snapshot else None
+
+    def set_twin_state(self, state) -> None:
+        with self._lock:
+            self._twin_state = state
+
+    def twin_state_dict(self):
+        with self._lock:
+            return self._twin_state.to_dict() if self._twin_state else None
 
     def errors(self) -> dict[str, str]:
         with self._lock:
