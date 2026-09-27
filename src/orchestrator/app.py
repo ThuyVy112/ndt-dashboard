@@ -21,6 +21,10 @@ from src.telemetry.collector import TelemetryCollector
 from src.telemetry.snapshot_builder import SnapshotBuilder
 from src.telemetry.snapshot_validator import SnapshotValidator
 from src.telemetry.writer import JsonlWriter
+from src.twin.capacity.model import CapacityModel
+from src.twin.state.builder import TwinStateBuilder
+from src.twin.state.quality import TwinQualityAssessor
+from src.twin.state.twinning_rate import TwinningRateTracker
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -77,6 +81,25 @@ validator = SnapshotValidator(
     freshness_max_age_ms=float(telemetry_cfg["freshness_max_age_ms"]),
 )
 snapshot_builder = SnapshotBuilder(validator)
+capacity_model = CapacityModel.from_file(
+    ROOT / "data" / "benchmarks" / "controller_capacity.json"
+)
+quality_cfg = telemetry_cfg["twin_quality"]
+twinning_tracker = TwinningRateTracker(
+    window_seconds=float(quality_cfg["twinning_window_seconds"]),
+)
+quality_assessor = TwinQualityAssessor(
+    expected_controller_ids=set(CONTROLLERS),
+    expected_switch_ids=set(SWITCHES),
+    max_age_ms=float(telemetry_cfg["freshness_max_age_ms"]),
+    min_completeness_ratio=float(quality_cfg["min_completeness_ratio"]),
+    min_twinning_rate=float(quality_cfg["min_twinning_rate"]),
+    twinning_rate_provider=twinning_tracker.rate,
+)
+twin_state_builder = TwinStateBuilder(
+    capacity_model=capacity_model,
+    quality_provider=quality_assessor.assess,
+)
 store = CurrentStateStore()
 writer = JsonlWriter()
 stop_event = threading.Event()
@@ -142,7 +165,17 @@ def build_snapshot(run_id: str):
         ownership=ownership_manager.states(),
         role_matrix=store.role_matrix(),
     )
-    store.set_snapshot(snapshot)
+    try:
+        twinning_tracker.record(
+            success=snapshot.quality.valid,
+            observed_at=snapshot.created_at,
+        )
+        twin_state = twin_state_builder.build(snapshot)
+        store.set_snapshot(snapshot)
+        store.set_twin_state(twin_state)
+    except Exception:
+        twinning_tracker.record(success=False)
+        raise
     writer.append(
         ROOT / telemetry_cfg["snapshot_data_dir"] / f"{run_id}.jsonl",
         snapshot.to_dict(),
@@ -210,6 +243,14 @@ def state():
         "telemetry_errors": store.errors(),
         "latest_snapshot": store.snapshot_dict(),
     }
+
+
+@app.get("/api/v1/twin/state")
+def twin_state():
+    value = store.twin_state_dict()
+    if value is None:
+        return {"status": "NOT_READY"}
+    return value
 
 
 @app.post("/api/v1/init-roles")
