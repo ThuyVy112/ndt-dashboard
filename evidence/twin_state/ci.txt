@@ -1,0 +1,76 @@
+python3 -m compileall -q src tests
+python3 -m ruff check src/schemas src/telemetry src/experiments src/orchestrator/app.py src/orchestrator/current_state.py tests/unit
+All checks passed!
+python3 -m mypy --ignore-missing-imports src/schemas src/telemetry src/experiments src/orchestrator/current_state.py tests/unit
+Success: no issues found in 55 source files
+python3 -m unittest discover -s tests/unit -v
+test_each_host_connected_to_matching_switch (test_capacity_2c20s_topology.Capacity2C20STopologyTests) ... ok
+test_switches_form_chain (test_capacity_2c20s_topology.Capacity2C20STopologyTests) ... ok
+test_topology_shape (test_capacity_2c20s_topology.Capacity2C20STopologyTests) ... ok
+test_aggregate_run_filters_samples_and_calculates_metrics (test_capacity_aggregator.CapacityAggregatorTests) ... ok
+test_missing_optional_streams_produce_empty_metrics (test_capacity_aggregator.CapacityAggregatorTests) ... ok
+test_smoke_config_is_valid (test_capacity_config.CapacityConfigTests) ... ok
+test_half_utilization (test_capacity_model.CapacityModelTests) ... ok
+test_invalid_capacity (test_capacity_model.CapacityModelTests) ... ok
+test_negative_load_rejected (test_capacity_model.CapacityModelTests) ... ok
+test_overload_not_clamped (test_capacity_model.CapacityModelTests) ... ok
+test_unknown_controller (test_capacity_model.CapacityModelTests) ... ok
+test_zero_load (test_capacity_model.CapacityModelTests) ... ok
+test_coverage_below_eighty_percent_is_an_error (test_capacity_validator.CapacityValidatorTests) ... ok
+test_missing_switches_and_collector_errors_are_errors (test_capacity_validator.CapacityValidatorTests) ... ok
+test_qos_failure_is_error_in_smoke_mode (test_capacity_validator.CapacityValidatorTests) ... ok
+test_qos_failure_is_warning_outside_smoke_mode (test_capacity_validator.CapacityValidatorTests) ... ok
+test_valid_summary_at_minimum_coverage (test_capacity_validator.CapacityValidatorTests) ... ok
+test_twin_state_dict_uses_state_serialization (test_current_state.CurrentStateStoreTests) ... ok
+test_twin_state_is_not_ready_until_set (test_current_state.CurrentStateStoreTests) ... ok
+test_serialization (test_experiment_metadata.ExperimentMetadataTests) ... ok
+test_commit (test_ownership.OwnershipTests) ... ok
+test_valid_config (test_qos_probe.QosProbeTests) ... ok
+test_zero_rate_rejected (test_qos_probe.QosProbeTests) ... ok
+test_rate (test_rate_calculator.RateCalculatorTests) ... ok
+test_reset (test_rate_calculator.RateCalculatorTests) ... ok
+test_valid_quiet_state (test_snapshot.SnapshotTests) ... ok
+test_build_valid_snapshot (test_snapshot_builder.SnapshotBuilderTests) ... ok
+test_missing_controller_is_invalid (test_snapshot_validator.SnapshotValidatorTests) ... ok
+test_role_ownership_conflict_is_invalid (test_snapshot_validator.SnapshotValidatorTests) ... ok
+test_stale_controller_is_invalid (test_snapshot_validator.SnapshotValidatorTests) ... ok
+test_valid_quiet_state (test_snapshot_validator.SnapshotValidatorTests) ... ok
+test_controller_serialization_contains_processed_rate (test_telemetry_schema.TelemetrySchemaTests) ... ok
+test_switch_serialization_contains_processed_rate (test_telemetry_schema.TelemetrySchemaTests) ... ok
+test_complete_snapshot_has_completeness_one (test_twin_quality.TwinQualityAssessorTests) ... ok
+test_controller_timestamps_one_hundred_ms_apart_have_matching_jitter (test_twin_quality.TwinQualityAssessorTests) ... ok
+test_controllers_observed_at_same_time_have_zero_jitter (test_twin_quality.TwinQualityAssessorTests) ... ok
+test_missing_controller_has_incomplete_invalid_quality (test_twin_quality.TwinQualityAssessorTests) ... ok
+test_missing_switch_telemetry_has_incomplete_quality (test_twin_quality.TwinQualityAssessorTests) ... ok
+test_ownership_conflict_is_reported_as_inconsistent (test_twin_quality.TwinQualityAssessorTests) ... ok
+test_stale_controller_is_invalid (test_twin_quality.TwinQualityAssessorTests) ... ok
+test_twinning_rate_below_point_nine_five_is_invalid (test_twin_quality.TwinQualityAssessorTests) ... ok
+test_twinning_rate_one_is_valid_when_other_conditions_pass (test_twin_quality.TwinQualityAssessorTests) ... ok
+test_collection_latency_is_preserved_in_milliseconds (test_twin_state_builder.TwinStateBuilderTests) ... ok
+test_load_500_has_half_utilization (test_twin_state_builder.TwinStateBuilderTests) ... ok
+test_load_above_safe_capacity_has_utilization_above_one (test_twin_state_builder.TwinStateBuilderTests) ... ok
+test_load_at_safe_capacity_has_one_utilization (test_twin_state_builder.TwinStateBuilderTests) ... ok
+test_load_zero_has_zero_utilization (test_twin_state_builder.TwinStateBuilderTests) ... ok
+test_unknown_controller_fails (test_twin_state_builder.TwinStateBuilderTests) ... ok
+test_empty_tracker_has_zero_rate (test_twinning_rate.TwinningRateTrackerTests) ... ok
+test_nine_successes_and_one_failure_have_rate_point_nine (test_twinning_rate.TwinningRateTrackerTests) ... ok
+test_ten_successes_have_rate_one (test_twinning_rate.TwinningRateTrackerTests) ... ok
+test_deadline_sequence (test_workload_generator.TestDeadlinePacer) ... ok
+test_period_ms_matches_rate (test_workload_generator.TestDeadlinePacer) ... ok
+test_wait_until_sleeps_remaining_time (test_workload_generator.TestDeadlinePacer) ... ok
+test_invalid_sample_interval_rejected (test_workload_generator.TestGeneratorValidation) ... ok
+test_negative_rate_is_rejected (test_workload_generator.TestGeneratorValidation) ... ok
+test_rate_zero_is_rejected (test_workload_generator.TestGeneratorValidation) ... ok
+test_valid_smoke_config (test_workload_generator.TestGeneratorValidation) ... ok
+test_invalid_port_range_rejected (test_workload_generator.TestPortAllocator) ... ok
+test_port_allocator_increments_sequentially (test_workload_generator.TestPortAllocator) ... ok
+test_port_allocator_wraps_to_start (test_workload_generator.TestPortAllocator) ... ok
+test_safe_port_pool (test_workload_generator.TestPortReuseSafety) ... ok
+test_unsafe_port_pool_rejected (test_workload_generator.TestPortReuseSafety) ... ok
+test_workload_sample_serializes (test_workload_generator.TestWorkloadSample) ... ok
+test_serialization (test_workload_schema.WorkloadSchemaTests) ... ok
+
+----------------------------------------------------------------------
+Ran 65 tests in 0.023s
+
+OK
