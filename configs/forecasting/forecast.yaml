@@ -1,0 +1,31 @@
+schema_version: "1.0"
+
+sampling:
+  interval_seconds: 1.0
+
+history:
+  window_seconds: 10
+
+horizon:
+  method: measured_runtime_p95
+  finalized: false
+  runtime_inputs_path: data/benchmarks/runtime/forecast_horizon_inputs.json
+
+training:
+  require_valid_snapshot: true
+
+features:
+  raw:
+    - utilization
+    - processed_packet_in_rate
+    - flow_mod_rate
+    - process_cpu_percent
+    - process_memory_rss_mb
+    - response_p95_ms
+    - managed_switch_count
+    - max_switch_control_load_share
+
+  rolling_windows_seconds:
+    - 3
+    - 5
+    - 10
