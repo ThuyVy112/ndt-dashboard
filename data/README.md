@@ -16,6 +16,14 @@ Each run contains:
 - validation.json
 - logs/
 
+Forecast-data runs use the same immutable-run principle. Their current files
+are:
+
+- `metadata.json`
+- `forecast_samples.jsonl`
+- `summary.json`
+- `validation.json`
+
 `_archive/` contains previous smoke/debug runs and must not be used
 automatically as official training data.
 
@@ -41,12 +49,17 @@ Derived controller-capacity artifacts:
 
 ## forecasting/
 
-Datasets for Future Load Predictor.
+Datasets for the Future Load Predictor.
 
 - raw/: aligned raw time series
 - processed/: feature-engineered dataset
 - splits/: train/validation/test
 - reports/: dataset quality/statistics
+
+The raw forecast sample schema is defined by `ForecastRawSample`. Invalid
+Twin State quality does not remove a raw sample; it is retained in
+`forecast_samples.jsonl` and counted in `validation.json` as
+`invalid_snapshot_count`.
 
 ## outcome/
 

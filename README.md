@@ -12,10 +12,10 @@ end to end:
 
 `Ryu C1/C2 -> telemetry every 1 s -> Central Orchestrator -> raw JSONL -> coherent snapshot every 5 s -> migration -> ownership/role change -> post-migration snapshot -> rollback snapshot`
 
-The next research stages are safe-capacity modeling, forecasting, larger
-topologies, and dashboards. The current capacity implementation is limited to
-the configured 2C4S smoke benchmark; it does not claim those later stages are
-complete.
+The current research stages include safe-capacity modeling and the first
+forecasting dataset contracts. Forecast collection is implemented as a Python
+runner, but it still requires the configured Twin State provider and does not
+yet provide a standalone CLI or claim that model training is complete.
 
 ## Repository responsibilities
 
@@ -24,7 +24,9 @@ complete.
 - `src/telemetry/`: polling, raw storage, snapshot building and validation.
 - `src/execution/`: migration, verification and rollback.
 - `src/experiments/`: capacity benchmark runner, collector, aggregation,
-  validation, topology, and workload components.
+  validation, topology, workload, and forecast-data components.
+- `src/twin/forecasting/`: forecast horizon estimation and raw-sample
+  validation with audit-preserving snapshot issues.
 - `src/schemas/`: shared contracts. Both developers must use these classes rather than inventing separate JSON shapes.
 - `tests/unit/`: fast tests that run on every PR.
 - `tests/integration/`: real 2C-4S SDN smoke test for the GCP self-hosted runner.
@@ -351,5 +353,21 @@ manual procedure and output contract are in
 GitHub-hosted unit-test job; it requires the self-hosted Linux/Mininet/OVS
 environment.
 
-After the 2C4S benchmark has produced valid runs, the next work can extend the
-experiment matrix and build safe-capacity estimation and forecasting datasets.
+## Forecasting dataset status
+
+The initial forecasting dataset pipeline is present and includes:
+
+- `ForecastRawSample` as the shared raw-sample schema;
+- workload profiles for stable, gradual, burst, oscillating, and hot-switch
+  patterns;
+- raw benchmark validation for timestamp order, duplicates, sampling gaps,
+  safe capacity, utilization, and snapshot identity;
+- measured runtime horizon estimation using collection, decision, and
+  migration p95 latency;
+- a Twin State converter and JSONL/metadata/final validation output in
+  `src/experiments/runners/forecast_data_runner.py`.
+
+The converter reads the JSON returned by `/api/v1/twin/state`. The output
+contract and current limitations are documented in
+`docs/forecasting-dataset.md`. Model training and a standalone forecast-data
+runner CLI are not part of this milestone.
