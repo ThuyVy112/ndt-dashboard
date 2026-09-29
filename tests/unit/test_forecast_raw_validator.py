@@ -188,39 +188,49 @@ class ForecastRawValidatorTests(unittest.TestCase):
             },
         )
 
-    def test_non_finite_numeric_values_are_invalid(self):
-        cases = (
-            ("safe_capacity_pps", math.nan),
-            ("safe_capacity_pps", math.inf),
-            ("safe_capacity_pps", -math.inf),
-            ("utilization", math.nan),
-            ("utilization", math.inf),
-            ("utilization", -math.inf),
-        )
-
-        for field_name, value in cases:
-            with self.subTest(
-                field_name=field_name,
-                value=value,
-            ):
+    def test_non_finite_safe_capacity_is_invalid(self):
+        for value in (
+            math.nan,
+            math.inf,
+            -math.inf,
+        ):
+            with self.subTest(value=value):
                 result = validate_raw_samples(
                     [
                         self.make_sample(
-                            **{field_name: value}
+                            safe_capacity_pps=value,
                         )
                     ]
                 )
 
                 self.assertFalse(result.valid)
-
-                expected_code = (
-                    "safe_capacity_invalid"
-                    if field_name == "safe_capacity_pps"
-                    else "utilization_invalid"
+                self.assertIn(
+                    "safe_capacity_invalid",
+                    {
+                        issue.code
+                        for issue in result.issues
+                    },
                 )
 
+
+    def test_non_finite_utilization_is_invalid(self):
+        for value in (
+            math.nan,
+            math.inf,
+            -math.inf,
+        ):
+            with self.subTest(value=value):
+                result = validate_raw_samples(
+                    [
+                        self.make_sample(
+                            utilization=value,
+                        )
+                    ]
+                )
+
+                self.assertFalse(result.valid)
                 self.assertIn(
-                    expected_code,
+                    "utilization_invalid",
                     {
                         issue.code
                         for issue in result.issues
@@ -376,7 +386,6 @@ class ForecastRawValidatorTests(unittest.TestCase):
             math.inf,
             -math.inf,
             math.nan,
-            "invalid",
         )
 
         for expected_interval in invalid_values:
@@ -394,7 +403,17 @@ class ForecastRawValidatorTests(unittest.TestCase):
                             expected_interval
                         ),
                     )
-
+    def test_expected_sampling_interval_rejects_non_numeric_value(
+        self,
+    ):
+        with self.assertRaisesRegex(
+            ValueError,
+            "expected_sampling_interval_seconds must be positive",
+        ):
+            validate_raw_samples(
+                [],
+                expected_sampling_interval_seconds="invalid",  # type: ignore[arg-type]
+            )
 
 if __name__ == "__main__":
     unittest.main()
