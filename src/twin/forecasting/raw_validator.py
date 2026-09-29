@@ -116,7 +116,7 @@ def validate_raw_samples(
 
     for controller_id, controller_samples in grouped_samples.items():
         previous_timestamp: datetime | None = None
-        for _, observed_at, snapshot_id in controller_samples:
+        for _, observed_at, sample_snapshot_id in controller_samples:
             timestamp = _parse_timestamp(observed_at)
             if timestamp is None:
                 issues.append(
@@ -124,7 +124,7 @@ def validate_raw_samples(
                         code="timestamp_invalid",
                         message="observed_at must be a valid timestamp",
                         controller_id=controller_id,
-                        snapshot_id=snapshot_id,
+                        snapshot_id=sample_snapshot_id,
                     )
                 )
                 continue
@@ -144,7 +144,7 @@ def validate_raw_samples(
                                 else "timestamps must be strictly increasing"
                             ),
                             controller_id=controller_id,
-                            snapshot_id=snapshot_id,
+                            snapshot_id=sample_snapshot_id,
                         )
                     )
                 elif not math.isclose(
@@ -161,7 +161,7 @@ def validate_raw_samples(
                                 f"got {interval:g}s"
                             ),
                             controller_id=controller_id,
-                            snapshot_id=snapshot_id,
+                            snapshot_id=sample_snapshot_id,
                         )
                     )
                     if interval > expected_interval:
@@ -174,7 +174,7 @@ def validate_raw_samples(
                                     f"greater than expected {expected_interval:g}s"
                                 ),
                                 controller_id=controller_id,
-                                snapshot_id=snapshot_id,
+                                snapshot_id=sample_snapshot_id,
                             )
                         )
 
