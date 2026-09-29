@@ -61,6 +61,8 @@ The runner writes one directory per run below its configured output directory:
 
 - `metadata.json`: schema version, run id, workload, duration, sampling
   interval, configured controllers, and migration status;
+- `workload.jsonl`: one `WorkloadPoint` record per sampling tick, including
+  elapsed time, phase, target utilization, and optional hot-switch fields;
 - `forecast_samples.jsonl`: one serialized `ForecastRawSample` per controller
   and observation;
 - `validation.json`: validity, sample counts, issue counters, and structured

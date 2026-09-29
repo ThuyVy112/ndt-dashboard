@@ -35,6 +35,21 @@ class WorkloadPoint:
         if not self.phase.strip():
             raise ValueError("phase must not be empty")
 
+        if (self.hot_switch_id is None) != (self.hot_switch_share is None):
+            raise ValueError(
+                "hot_switch_id and hot_switch_share must be provided together"
+            )
+
+        if self.hot_switch_id is not None:
+            if not self.hot_switch_id.strip():
+                raise ValueError("hot_switch_id must not be empty")
+
+        if self.hot_switch_share is not None:
+            if not math.isfinite(self.hot_switch_share):
+                raise ValueError("hot_switch_share must be finite")
+            if not 0.0 <= self.hot_switch_share <= 1.0:
+                raise ValueError("hot_switch_share must be in [0, 1]")
+
 
 class WorkloadProfile(ABC):
     @abstractmethod

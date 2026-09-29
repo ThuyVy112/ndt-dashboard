@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
+from src.experiments.workloads.profile import WorkloadPoint
 from src.schemas.forecasting import ForecastRawSample
 from src.twin.forecasting.raw_validator import validate_raw_samples
 
@@ -30,7 +31,7 @@ class ForecastDataRunner:
         self,
         config: ForecastRunConfig,
         twin_state_provider: Callable[[], dict[str, Any]],
-        workload_step: Callable[[float], None],
+        workload_step: Callable[[float], WorkloadPoint],
     ) -> None:
         self.config = config
         self.twin_state_provider = twin_state_provider
@@ -62,9 +63,6 @@ class ForecastDataRunner:
             if elapsed >= self.config.duration_seconds:
                 break
 
-            # Update workload target.
-            self.workload_step(elapsed)
-
             if now < next_sample_at:
                 time.sleep(
                     min(
@@ -74,6 +72,19 @@ class ForecastDataRunner:
                 )
                 continue
 
+            workload_point = self.workload_step(elapsed)
+            self._append_jsonl(
+                run_dir / "workload.jsonl",
+                {
+                    "elapsed_seconds": workload_point.elapsed_seconds,
+                    "workload_type": self.config.workload_type,
+                    "phase": workload_point.phase,
+                    "target_utilization": workload_point.target_utilization,
+                    "hot_switch_id": workload_point.hot_switch_id,
+                    "hot_switch_share": workload_point.hot_switch_share,
+                },
+            )
+
             twin_state = self.twin_state_provider()
 
             observed_at = datetime.now(timezone.utc)
@@ -82,6 +93,7 @@ class ForecastDataRunner:
                 run_id=run_id,
                 observed_at=observed_at,
                 twin_state=twin_state,
+                workload_point=workload_point,
             )
 
             samples.extend(current_samples)
@@ -109,17 +121,38 @@ class ForecastDataRunner:
         run_id: str,
         observed_at: datetime,
         twin_state: dict[str, Any],
+        workload_point: WorkloadPoint,
     ) -> list[ForecastRawSample]:
         samples: list[ForecastRawSample] = []
 
         snapshot_id = str(twin_state.get("snapshot_id", ""))
         quality = twin_state.get("quality", {})
         controllers = twin_state.get("controllers", [])
+        switches = twin_state.get("switches", [])
+        ownership = twin_state.get("ownership", [])
+
+        owner_by_switch = {
+            str(item["switch_id"]): str(item["owner_controller_id"])
+            for item in ownership
+        }
 
         for controller in controllers:
             controller_id = str(controller["controller_id"])
             if controller_id not in self.config.controller_ids:
                 continue
+            owned_switch_load_shares = [
+                float(switch.get("control_load_share", 0.0))
+                for switch in switches
+                if str(switch.get("controller_id", "")) == controller_id
+                and owner_by_switch.get(
+                    str(switch.get("switch_id", ""))
+                ) == controller_id
+            ]
+
+            max_switch_control_load_share = max(
+                owned_switch_load_shares,
+                default=0.0,
+            )
 
             samples.append(
                 ForecastRawSample(
@@ -127,12 +160,7 @@ class ForecastDataRunner:
                     controller_id=controller_id,
                     observed_at=observed_at,
                     workload_type=self.config.workload_type,
-                    workload_phase=str(
-                        controller.get(
-                            "workload_phase",
-                            self.config.workload_type,
-                        )
-                    ),
+                    workload_phase=workload_point.phase,
                     processed_packet_in_rate=float(
                         controller["processed_packet_in_rate"]
                     ),
@@ -152,7 +180,7 @@ class ForecastDataRunner:
                     safe_capacity_pps=float(controller["safe_capacity_pps"]),
                     utilization=float(controller["utilization"]),
                     max_switch_control_load_share=float(
-                        controller.get("max_switch_control_load_share", 0.0)
+                        max_switch_control_load_share
                     ),
                     age_of_twin_ms=float(quality.get("age_of_twin_ms", 0.0)),
                     twinning_rate=float(quality.get("twinning_rate", 0.0)),
