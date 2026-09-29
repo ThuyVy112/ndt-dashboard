@@ -24,6 +24,7 @@ class ForecastRunConfig:
     sampling_interval_seconds: float
     controller_ids: tuple[str, ...]
     output_dir: Path
+    run_id: str | None = None
 
 
 class ForecastDataRunner:
@@ -38,7 +39,7 @@ class ForecastDataRunner:
         self.workload_step = workload_step
 
     def run(self) -> Path:
-        run_id = (
+        run_id = self.config.run_id or (
             f"{self.config.workload_type}-"
             f"{uuid.uuid4().hex[:8]}"
         )
@@ -73,17 +74,17 @@ class ForecastDataRunner:
                 continue
 
             workload_point = self.workload_step(elapsed)
-            self._append_jsonl(
-                run_dir / "workload.jsonl",
-                {
-                    "elapsed_seconds": workload_point.elapsed_seconds,
-                    "workload_type": self.config.workload_type,
-                    "phase": workload_point.phase,
-                    "target_utilization": workload_point.target_utilization,
-                    "hot_switch_id": workload_point.hot_switch_id,
-                    "hot_switch_share": workload_point.hot_switch_share,
-                },
-            )
+            # self._append_jsonl(
+            #     run_dir / "workload.jsonl",
+            #     {
+            #         "elapsed_seconds": workload_point.elapsed_seconds,
+            #         "workload_type": self.config.workload_type,
+            #         "phase": workload_point.phase,
+            #         "target_utilization": workload_point.target_utilization,
+            #         "hot_switch_id": workload_point.hot_switch_id,
+            #         "hot_switch_share": workload_point.hot_switch_share,
+            #     },
+            # )
 
             twin_state = self.twin_state_provider()
 
