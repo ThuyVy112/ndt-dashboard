@@ -1,18 +1,22 @@
 # create valid sample, serialization datetime, immutable, reject identifiers, and reject invalid numeric values
 import math
 import unittest
-from dataclasses import FrozenInstanceError
+from dataclasses import FrozenInstanceError, replace
 from datetime import datetime, timezone
+from typing import Any
 
 from src.schemas.forecasting import ForecastRawSample
 
 
 class ForecastRawSampleTests(unittest.TestCase):
-    def make_sample(self, **overrides) -> ForecastRawSample:
-        values = {
-            "run_id": "forecast-stable-r01",
-            "controller_id": "c1",
-            "observed_at": datetime(
+    def make_sample(
+        self,
+        **overrides: Any,
+    ) -> ForecastRawSample:
+        sample = ForecastRawSample(
+            run_id="forecast-stable-r01",
+            controller_id="c1",
+            observed_at=datetime(
                 2026,
                 1,
                 1,
@@ -21,27 +25,29 @@ class ForecastRawSampleTests(unittest.TestCase):
                 0,
                 tzinfo=timezone.utc,
             ),
-            "workload_type": "stable",
-            "workload_phase": "steady",
-            "processed_packet_in_rate": 500.0,
-            "flow_mod_rate": 20.0,
-            "process_cpu_percent": 35.0,
-            "process_memory_rss_mb": 100.0,
-            "response_p95_ms": 10.0,
-            "managed_switch_count": 10,
-            "safe_capacity_pps": 830.0,
-            "utilization": 0.60,
-            "max_switch_control_load_share": 0.20,
-            "age_of_twin_ms": 100.0,
-            "twinning_rate": 1.0,
-            "completeness_ratio": 1.0,
-            "synchronization_jitter_ms": 5.0,
-            "snapshot_valid": True,
-            "snapshot_id": "snapshot-001",
-        }
+            workload_type="stable",
+            workload_phase="steady",
+            processed_packet_in_rate=500.0,
+            flow_mod_rate=20.0,
+            process_cpu_percent=35.0,
+            process_memory_rss_mb=100.0,
+            response_p95_ms=10.0,
+            managed_switch_count=10,
+            safe_capacity_pps=830.0,
+            utilization=0.60,
+            max_switch_control_load_share=0.20,
+            age_of_twin_ms=100.0,
+            twinning_rate=1.0,
+            completeness_ratio=1.0,
+            synchronization_jitter_ms=5.0,
+            snapshot_valid=True,
+            snapshot_id="snapshot-001",
+        )
 
-        values.update(overrides)
-        return ForecastRawSample(**values)
+        if not overrides:
+            return sample
+
+        return replace(sample, **overrides)
 
     def test_create_valid_sample(self):
         sample = self.make_sample()
@@ -72,7 +78,7 @@ class ForecastRawSampleTests(unittest.TestCase):
         sample = self.make_sample()
 
         with self.assertRaises(FrozenInstanceError):
-            sample.utilization = 0.90
+            sample.utilization = 0.90 # type: ignore[misc]
 
     def test_rejects_empty_workload_metadata(self):
         for field_name in (
