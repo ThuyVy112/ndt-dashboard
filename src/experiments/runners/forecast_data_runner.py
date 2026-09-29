@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
+from src.orchestrator.app import twin_state
 from src.schemas.forecasting import ForecastRawSample
 from src.twin.forecasting.raw_validator import validate_raw_samples
 
@@ -115,13 +116,32 @@ class ForecastDataRunner:
         snapshot_id = str(twin_state.get("snapshot_id", ""))
         quality = twin_state.get("quality", {})
         controllers = twin_state.get("controllers", [])
+        switches = twin_state.get("switches", [])
+        ownership = twin_state.get("ownership", [])
+
+        owner_by_switch = {
+            str(item["switch_id"]): str(item["owner_controller_id"])
+            for item in ownership
+        }
 
         for controller in controllers:
             controller_id = str(controller["controller_id"])
             if controller_id not in self.config.controller_ids:
                 continue
+            owned_switch_load_shares = [
+            float(switch.get("control_load_share", 0.0))
+            for switch in switches
+            if str(switch.get("controller_id", "")) == controller_id
+            and owner_by_switch.get(str(switch.get("switch_id", "")))
+            == controller_id
+        ]
 
-            samples.append(
+        max_switch_control_load_share = max(
+            owned_switch_load_shares,
+            default=0.0,
+        )
+
+        samples.append(
                 ForecastRawSample(
                     run_id=run_id,
                     controller_id=controller_id,
@@ -152,7 +172,7 @@ class ForecastDataRunner:
                     safe_capacity_pps=float(controller["safe_capacity_pps"]),
                     utilization=float(controller["utilization"]),
                     max_switch_control_load_share=float(
-                        controller.get("max_switch_control_load_share", 0.0)
+                        max_switch_control_load_share
                     ),
                     age_of_twin_ms=float(quality.get("age_of_twin_ms", 0.0)),
                     twinning_rate=float(quality.get("twinning_rate", 0.0)),
