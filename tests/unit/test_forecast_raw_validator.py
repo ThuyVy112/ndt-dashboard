@@ -14,7 +14,7 @@ class ForecastRawValidatorTests(unittest.TestCase):
         *,
         controller_id: str = "c1",
         snapshot_id: str = "s1",
-        observed_at: str = "2026-01-01T00:00:00+00:00",
+        observed_at: str | datetime = "2026-01-01T00:00:00+00:00",
         safe_capacity_pps: float = 100.0,
         utilization: float = 0.5,
         snapshot_valid: bool = True,
@@ -309,8 +309,12 @@ class ForecastRawValidatorTests(unittest.TestCase):
                 self.make_sample(snapshot_id="s1"),
                 self.make_sample(
                     snapshot_id="s2",
-                    observed_at=(
-                        "2026-01-01T00:00:00.5+00:00"
+                    observed_at=datetime(
+                        2026,
+                        1,
+                        1,
+                        microsecond=500_000,
+                        tzinfo=timezone.utc,
                     ),
                 ),
             ]
