@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+import argparse
+from pathlib import Path
+
 from mininet.cli import CLI
 from mininet.link import TCLink
 from mininet.log import setLogLevel
@@ -9,9 +12,48 @@ from mininet.node import OVSSwitch, RemoteController
 from src.experiments.topologies.capacity_2c20s import (
     Capacity2C20STopo,
 )
+from scripts.experiments.run_forecast_stable_2c20s import (
+    run_forecast_stable,
+)
+
+
+def build_arg_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--forecast-stable",
+        action="store_true",
+        help="run the stable forecast smoke instead of opening the Mininet CLI",
+    )
+    parser.add_argument(
+        "--capacity-runs",
+        type=Path,
+        help="benchmark CSV required by --forecast-stable",
+    )
+    parser.add_argument(
+        "--controller-capacity",
+        type=Path,
+        default=Path("data/benchmarks/controller_capacity.json"),
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("data/experiment_runs/forecasting"),
+    )
+    parser.add_argument("--duration", type=float, default=60.0)
+    parser.add_argument("--sample-interval", type=float, default=1.0)
+    parser.add_argument("--target-utilization", type=float, default=0.60)
+    parser.add_argument(
+        "--orchestrator-url",
+        default="http://127.0.0.1:9000",
+    )
+    return parser
 
 
 def main() -> None:
+    args = build_arg_parser().parse_args()
+    if args.forecast_stable and args.capacity_runs is None:
+        raise SystemExit("--capacity-runs is required with --forecast-stable")
+
     setLogLevel("info")
 
     net = Mininet(
@@ -60,7 +102,19 @@ def main() -> None:
         )
         print()
 
-        CLI(net)
+        if args.forecast_stable:
+            run_forecast_stable(
+                net,
+                capacity_runs_path=args.capacity_runs,
+                controller_capacity_path=args.controller_capacity,
+                output_dir=args.output_dir,
+                duration_seconds=args.duration,
+                sampling_interval_seconds=args.sample_interval,
+                target_utilization=args.target_utilization,
+                orchestrator_url=args.orchestrator_url,
+            )
+        else:
+            CLI(net)
 
     finally:
         print("*** Stopping network")

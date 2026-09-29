@@ -4,6 +4,51 @@ experiment:
   name: forecast-dataset-2c20s
   type: forecast-dataset-2c20s
 
+scenarios:
+  c1:
+    source_host: h1
+    source_ip: "10.0.0.1"
+    target_host: h10
+    target_ip: "10.0.0.10"
+    path_switches:
+      - s1
+      - s2
+      - s3
+      - s4
+      - s5
+      - s6
+      - s7
+      - s8
+      - s9
+      - s10
+  c2:
+    source_host: h11
+    source_ip: "10.0.0.11"
+    target_host: h20
+    target_ip: "10.0.0.20"
+    path_switches:
+      - s11
+      - s12
+      - s13
+      - s14
+      - s15
+      - s16
+      - s17
+      - s18
+      - s19
+      - s20
+
+runtime:
+  orchestrator_url: "http://127.0.0.1:9000"
+
+workload:
+  protocol: udp
+  target_port: 9000
+  source_port_start: 12000
+  source_port_end: 65000
+  flow_idle_timeout_seconds: 5.0
+  port_reuse_safety_factor: 2.0
+
 topology:
   name: capacity_2c20s
 
