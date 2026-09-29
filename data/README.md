@@ -20,6 +20,7 @@ Forecast-data runs use the same immutable-run principle. Their current files
 are:
 
 - `metadata.json`
+- `workload.jsonl`
 - `forecast_samples.jsonl`
 - `summary.json`
 - `validation.json`
