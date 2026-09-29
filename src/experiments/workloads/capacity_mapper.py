@@ -188,7 +188,7 @@ class CapacityWorkloadMapper:
 			raise ValueError("target_utilization must be numeric") from exc
 
         # workload burst need U = 1.10 -- U = 1.05 (based on real workload) -- U = 1.0 (based on real workload) -- U = 0.95 (based on real workload)
-		if not math.isfinite(utilization) or not utilization < 0.0:
+		if not math.isfinite(utilization) or utilization < 0.0:
 			raise ValueError("target_utilization must be a finite non-negative number")
 
 		try:
