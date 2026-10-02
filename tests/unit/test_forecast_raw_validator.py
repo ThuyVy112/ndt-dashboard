@@ -354,10 +354,44 @@ class ForecastRawValidatorTests(unittest.TestCase):
         self.assertEqual(result.sampling_gap_count, 1)
         self.assertEqual(
             [issue.code for issue in result.issues],
+            ["sampling_gap"],
+        )
+
+    def test_scheduler_jitter_within_ten_percent_is_accepted(self):
+        result = validate_raw_samples(
             [
-                "sampling_interval",
-                "sampling_gap",
-            ],
+                self.make_sample(snapshot_id="s1"),
+                self.make_sample(
+                    snapshot_id="s2",
+                    observed_at=(
+                        "2026-01-01T00:00:01.005000+00:00"
+                    ),
+                ),
+            ]
+        )
+
+        self.assertTrue(result.valid)
+        self.assertEqual(result.sampling_gap_count, 0)
+        self.assertEqual(result.issues, ())
+
+    def test_interval_outside_tolerance_without_gap_is_reported(self):
+        result = validate_raw_samples(
+            [
+                self.make_sample(snapshot_id="s1"),
+                self.make_sample(
+                    snapshot_id="s2",
+                    observed_at=(
+                        "2026-01-01T00:00:01.200000+00:00"
+                    ),
+                ),
+            ]
+        )
+
+        self.assertFalse(result.valid)
+        self.assertEqual(result.sampling_gap_count, 0)
+        self.assertEqual(
+            [issue.code for issue in result.issues],
+            ["sampling_interval"],
         )
 
     def test_custom_sampling_interval_is_supported(self):

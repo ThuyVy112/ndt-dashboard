@@ -28,6 +28,27 @@ class TwinningRateTrackerTests(unittest.TestCase):
 
         self.assertEqual(tracker.rate(self.now), 0.0)
 
+    def test_reset_clears_existing_measurements(self):
+        tracker = TwinningRateTracker(window_seconds=60)
+        tracker.record(True, self.now)
+        tracker.record(False, self.now)
+
+        self.assertEqual(tracker.rate(self.now), 0.5)
+
+        tracker.reset()
+
+        self.assertEqual(tracker.rate(self.now), 0.0)
+
+    def test_new_measurement_after_reset_starts_fresh_window(self):
+        tracker = TwinningRateTracker(window_seconds=60)
+        tracker.record(False, self.now)
+        tracker.record(False, self.now)
+
+        tracker.reset()
+        tracker.record(True, self.now)
+
+        self.assertEqual(tracker.rate(self.now), 1.0)
+
 
 if __name__ == "__main__":
     unittest.main()

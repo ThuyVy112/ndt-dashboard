@@ -1,21 +1,29 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import os
+import json
 import subprocess
 import time
 import uuid
+import warnings
 from pathlib import Path
 from typing import Any
 
-import requests
-
+from scripts.experiments.run_forecast_stable_2c20s import (
+    DEFAULT_ORCHESTRATOR_URL,
+    get_twin_state,
+    start_host_process,
+    terminate_process,
+    wait_for_twin_state,
+)
 from src.experiments.runners.forecast_data_runner import (
     ForecastDataRunner,
     ForecastRunConfig,
 )
-from src.experiments.workloads.capacity_mapper import CapacityWorkloadMapper
-from src.experiments.workloads.stable import StableWorkload
+from src.experiments.workloads.burst import BurstWorkload
+from src.experiments.workloads.capacity_mapper import (
+    CapacityWorkloadMapper,
+)
 
 
 CONTROLLER_IDS = ("c1", "c2")
@@ -30,119 +38,52 @@ GENERATORS = (
     ("h11", "10.0.0.11", "h20", "10.0.0.20"),
 )
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_ORCHESTRATOR_URL = "http://127.0.0.1:9000"
+BURST_UTILIZATIONS = (
+    0.50,
+    1.05,
+    1.10,
+)
 
 
-def get_twin_state(
-    orchestrator_url: str = DEFAULT_ORCHESTRATOR_URL,
-) -> dict[str, Any]:
-    response = requests.get(
-        f"{orchestrator_url.rstrip('/')}/api/v1/twin/state",
-        timeout=2.0,
-    )
-    response.raise_for_status()
+def build_rate_map(
+    mapper: CapacityWorkloadMapper,
+    controller_id: str,
+) -> tuple[dict[str, float], list[dict[str, Any]]]:
+    rate_map: dict[str, float] = {}
+    mapping_evidence: list[dict[str, Any]] = []
 
-    payload = response.json()
+    for utilization in BURST_UTILIZATIONS:
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
 
-    if not isinstance(payload, dict):
-        raise RuntimeError(
-            "Twin State response must be a JSON object"
-        )
-
-    if payload.get("status") == "NOT_READY":
-        raise RuntimeError("Twin State is not ready")
-
-    return payload
-
-
-def wait_for_twin_state(
-    orchestrator_url: str,
-    timeout_seconds: float = 30.0,
-) -> dict[str, Any]:
-    """Wait until the orchestrator exposes a valid NDT TwinState."""
-    deadline = time.monotonic() + timeout_seconds
-    last_error = "Twin State is not ready"
-
-    while time.monotonic() < deadline:
-        try:
-            state = get_twin_state(orchestrator_url)
-
-            quality = state.get("quality")
-            if not isinstance(quality, dict):
-                last_error = "Twin State has no quality object"
-            elif not bool(quality.get("valid", False)):
-                last_error = (
-                    "Twin State is not valid: "
-                    f"snapshot_id={state.get('snapshot_id')}, "
-                    f"twinning_rate={quality.get('twinning_rate')}, "
-                    f"completeness_ratio="
-                    f"{quality.get('completeness_ratio')}, "
-                    f"consistent={quality.get('consistent')}"
+            offered_rate = (
+                mapper.offered_rate_for_utilization(
+                    controller_id,
+                    utilization,
                 )
-            else:
-                return state
+            )
 
-        except (
-            requests.RequestException,
-            RuntimeError,
-            ValueError,
-        ) as exc:
-            last_error = str(exc)
+        warning_messages = [
+            str(item.message)
+            for item in caught
+        ]
 
-        time.sleep(0.5)
+        rate_map[f"{utilization:.2f}"] = offered_rate
 
-    raise RuntimeError(
-        f"timed out waiting for valid Twin State: {last_error}"
-    )
-
-
-def terminate_process(
-    process: subprocess.Popen[Any] | None,
-) -> None:
-    if process is None or process.poll() is not None:
-        return
-
-    process.terminate()
-
-    try:
-        process.wait(timeout=5.0)
-    except subprocess.TimeoutExpired:
-        process.kill()
-        process.wait(timeout=5.0)
-
-
-def start_host_process(
-    host: Any,
-    arguments: list[str],
-    *,
-    output_path: Path | None = None,
-) -> subprocess.Popen[Any]:
-    environment = os.environ.copy()
-    environment["PYTHONPATH"] = str(REPO_ROOT)
-
-    stdout: Any = subprocess.DEVNULL
-
-    if output_path is not None:
-        output_path.parent.mkdir(
-            parents=True,
-            exist_ok=True,
-        )
-        stdout = output_path.open(
-            "w",
-            encoding="utf-8",
+        mapping_evidence.append(
+            {
+                "controller_id": controller_id,
+                "requested_utilization": utilization,
+                "offered_rate_fps": offered_rate,
+                "clamped": bool(warning_messages),
+                "warnings": warning_messages,
+            }
         )
 
-    return host.popen(
-        arguments,
-        cwd=str(REPO_ROOT),
-        env=environment,
-        stdout=stdout,
-        stderr=subprocess.STDOUT,
-    )
+    return rate_map, mapping_evidence
 
 
-def run_forecast_stable(
+def run_forecast_burst(
     net: Any,
     *,
     capacity_runs_path: Path,
@@ -150,27 +91,35 @@ def run_forecast_stable(
     output_dir: Path,
     duration_seconds: float = 60.0,
     sampling_interval_seconds: float = 1.0,
-    target_utilization: float = 0.60,
     orchestrator_url: str = DEFAULT_ORCHESTRATOR_URL,
 ) -> Path:
+    if duration_seconds < 60.0:
+        raise ValueError(
+            "burst workload requires duration_seconds >= 60"
+        )
+
+    # Burst intentionally requests utilization above the
+    # safe-capacity reference. Do not extrapolate beyond the
+    # observed monotonic benchmark region. Clamp instead.
     mapper = CapacityWorkloadMapper(
         capacity_runs_path=capacity_runs_path,
         controller_capacity_path=controller_capacity_path,
+        range_policy="clamp",
     )
 
-    offered_rates = {
-        controller_id: mapper.offered_rate_for_utilization(
+    profile = BurstWorkload()
+
+    rate_maps: dict[str, dict[str, float]] = {}
+    mapping_evidence: list[dict[str, Any]] = []
+
+    for controller_id in CONTROLLER_IDS:
+        rate_map, evidence = build_rate_map(
+            mapper,
             controller_id,
-            target_utilization,
         )
-        for controller_id in CONTROLLER_IDS
-    }
 
-    stable_profile = StableWorkload(
-        target_utilization
-    )
-
-    processes: list[subprocess.Popen[Any]] = []
+        rate_maps[controller_id] = rate_map
+        mapping_evidence.extend(evidence)
 
     wait_for_twin_state(orchestrator_url)
 
@@ -179,7 +128,7 @@ def run_forecast_stable(
         exist_ok=True,
     )
 
-    run_id = f"stable-{uuid.uuid4().hex[:8]}"
+    run_id = f"burst-{uuid.uuid4().hex[:8]}"
     run_dir = output_dir / run_id
 
     run_dir.mkdir(
@@ -193,8 +142,40 @@ def run_forecast_stable(
         exist_ok=True,
     )
 
+    rate_map_paths: dict[str, Path] = {}
+
+    for controller_id in CONTROLLER_IDS:
+        path = run_dir / f"rate_map_{controller_id}.json"
+
+        path.write_text(
+            json.dumps(
+                rate_maps[controller_id],
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        rate_map_paths[controller_id] = path
+
+    (
+        run_dir / "burst_mapping_evidence.json"
+    ).write_text(
+        json.dumps(
+            {
+                "range_policy": "clamp",
+                "extrapolation": False,
+                "mappings": mapping_evidence,
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    processes: list[subprocess.Popen[Any]] = []
+
     try:
-        # Start UDP sinks.
         for host_name, bind_ip, port in SINKS:
             process = start_host_process(
                 net.get(host_name),
@@ -208,10 +189,10 @@ def run_forecast_stable(
                     str(port),
                 ],
                 output_path=(
-                    logs_dir /
-                    f"sink_{host_name}.log"
+                    logs_dir / f"sink_{host_name}.log"
                 ),
             )
+
             processes.append(process)
 
         time.sleep(0.25)
@@ -223,7 +204,6 @@ def run_forecast_stable(
                     f"with code {process.returncode}"
                 )
 
-        # Start one workload generator per controller.
         for index, (
             host_name,
             source_ip,
@@ -237,7 +217,7 @@ def run_forecast_stable(
                 [
                     "python3",
                     "-m",
-                    "src.experiments.workloads.udp_new_flow",
+                    "src.experiments.workloads.udp_dynamic_flow",
                     "--run-id",
                     f"{run_id}-{controller_id}",
                     "--source-host",
@@ -251,22 +231,24 @@ def run_forecast_stable(
                     "--target-port",
                     "9000",
                     "--pattern",
-                    "stable",
-                    "--rate",
-                    str(offered_rates[controller_id]),
+                    "burst",
+                    "--rate-map",
+                    str(
+                        rate_map_paths[controller_id]
+                    ),
                     "--duration",
                     str(duration_seconds),
                     "--sample-interval",
                     str(sampling_interval_seconds),
                     "--output",
                     str(
-                        run_dir /
-                        f"workload_{controller_id}.jsonl"
+                        run_dir
+                        / f"workload_{controller_id}.jsonl"
                     ),
                 ],
                 output_path=(
-                    logs_dir /
-                    f"generator_{controller_id}.log"
+                    logs_dir
+                    / f"generator_{controller_id}.log"
                 ),
             )
 
@@ -274,16 +256,16 @@ def run_forecast_stable(
 
         time.sleep(0.25)
 
-        for process in processes:
+        for process in processes[len(SINKS):]:
             if process.poll() is not None:
                 raise RuntimeError(
-                    "forecast process exited early "
+                    "burst generator exited early "
                     f"with code {process.returncode}"
                 )
 
         runner = ForecastDataRunner(
             config=ForecastRunConfig(
-                workload_type="stable",
+                workload_type="burst",
                 duration_seconds=duration_seconds,
                 sampling_interval_seconds=(
                     sampling_interval_seconds
@@ -295,12 +277,11 @@ def run_forecast_stable(
             twin_state_provider=lambda: get_twin_state(
                 orchestrator_url
             ),
-            workload_step=stable_profile.target_at,
+            workload_step=profile.target_at,
         )
 
         result = runner.run()
 
-        # Give generators a short opportunity to finish cleanly.
         for process in processes[len(SINKS):]:
             try:
                 process.wait(timeout=2.0)
@@ -312,3 +293,9 @@ def run_forecast_stable(
     finally:
         for process in reversed(processes):
             terminate_process(process)
+
+
+if __name__ == "__main__":
+    raise SystemExit(
+        "Use runtime_2c20s.py --forecast-burst"
+    )

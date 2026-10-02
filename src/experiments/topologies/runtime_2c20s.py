@@ -12,13 +12,69 @@ from mininet.node import OVSSwitch, RemoteController
 from src.experiments.topologies.capacity_2c20s import (
     Capacity2C20STopo,
 )
+from src.experiments.topologies.forecast_hot_switch_2c20s import (
+    ForecastHotSwitch2C20STopo,
+)
+from src.experiments.topologies.capacity_smoke_2c20s import (
+    post_json,
+    validate_initialized_ownership,
+    wait_for_controller_connections,
+)
 from scripts.experiments.run_forecast_stable_2c20s import (
     run_forecast_stable,
+)
+from scripts.experiments.run_forecast_gradual_2c20s import (
+    run_forecast_gradual,
+)
+from scripts.experiments.run_forecast_burst_2c20s import (
+    run_forecast_burst,
+)
+from scripts.experiments.run_forecast_oscillating_2c20s import (
+    run_forecast_oscillating,
+)
+from scripts.experiments.run_forecast_hot_switch_2c20s import (
+    run_forecast_hot_switch,
 )
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--forecast-hot-switch",
+        action="store_true",
+        help=(
+            "run the hot-switch forecast workload "
+            "instead of opening the Mininet CLI"
+        ),
+    )
+
+    parser.add_argument(
+        "--forecast-oscillating",
+        action="store_true",
+        help=(
+            "run the oscillating forecast workload "
+            "instead of opening the Mininet CLI"
+        ),
+    )
+
+    parser.add_argument(
+        "--forecast-burst",
+        action="store_true",
+        help=(
+            "run the burst forecast workload instead "
+            "of opening the Mininet CLI"
+        ),
+    )
+
+    parser.add_argument(
+        "--forecast-gradual",
+        action="store_true",
+        help=(
+            "run the gradual forecast workload instead "
+            "of opening the Mininet CLI"
+        ),
+    )
+
     parser.add_argument(
         "--forecast-stable",
         action="store_true",
@@ -49,15 +105,79 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
+
+def initialize_forecast_runtime(
+    *,
+    orchestrator_url: str,
+) -> None:
+    """Prepare the 2C20S control plane for any forecast workload."""
+    print(
+        "*** Waiting for all 20 switch-controller connections"
+    )
+
+    wait_for_controller_connections(
+        controller_urls={
+            "c1": "http://127.0.0.1:8081",
+            "c2": "http://127.0.0.1:8082",
+        },
+        expected_switch_count=20,
+    )
+
+    print("CONTROLLER_CONNECTIONS: PASS")
+
+    base_url = orchestrator_url.rstrip("/")
+
+    print("*** Initializing OpenFlow roles")
+
+    roles = post_json(
+        f"{base_url}/api/v1/init-roles"
+    )
+
+    validate_initialized_ownership(
+        roles.get("ownership")
+    )
+
+    print(
+        "*** INIT_ROLES:",
+        roles.get("ownership"),
+        flush=True,
+    )
+
+    print("*** Roles initialized successfully")
+
 def main() -> None:
     args = build_arg_parser().parse_args()
-    if args.forecast_stable and args.capacity_runs is None:
-        raise SystemExit("--capacity-runs is required with --forecast-stable")
+    forecast_modes = (
+        args.forecast_stable,
+        args.forecast_gradual,
+        args.forecast_burst,
+        args.forecast_oscillating,
+        args.forecast_hot_switch,
+    )
+
+    if (
+        any(forecast_modes)
+        and args.capacity_runs is None
+    ):
+        raise SystemExit(
+            "--capacity-runs is required with forecast workloads"
+        )
+
+    if sum(bool(mode) for mode in forecast_modes) > 1:
+        raise SystemExit(
+            "choose only one forecast workload"
+        )
 
     setLogLevel("info")
 
+    topology = (
+        ForecastHotSwitch2C20STopo()
+        if args.forecast_hot_switch
+        else Capacity2C20STopo()
+    )
+
     net = Mininet(
-        topo=Capacity2C20STopo(),
+        topo=topology,
         controller=None,
         switch=OVSSwitch,
         link=TCLink,
@@ -92,27 +212,132 @@ def main() -> None:
         print("***   C1 -> 127.0.0.1:6653")
         print("***   C2 -> 127.0.0.1:6654")
         print()
-        print("*** DO NOT generate traffic yet.")
-        print(
-            "*** Init roles from another terminal:"
-        )
-        print(
-            "*** curl -s -X POST "
-            "http://127.0.0.1:9000/api/v1/init-roles | jq"
-        )
-        print()
 
-        if args.forecast_stable:
+        if (
+            args.forecast_stable
+            or args.forecast_gradual
+            or args.forecast_burst
+            or args.forecast_oscillating
+            or args.forecast_hot_switch
+        ):
+            initialize_forecast_runtime(
+                orchestrator_url=args.orchestrator_url,
+            )
+
+        if args.forecast_hot_switch:
+            print(
+                "*** Starting hot-switch "
+                "forecast workload"
+            )
+
+            run_forecast_hot_switch(
+                net,
+                capacity_runs_path=(
+                    args.capacity_runs
+                ),
+                controller_capacity_path=(
+                    args.controller_capacity
+                ),
+                output_dir=args.output_dir,
+                duration_seconds=args.duration,
+                sampling_interval_seconds=(
+                    args.sample_interval
+                ),
+                orchestrator_url=(
+                    args.orchestrator_url
+                ),
+            )
+
+        elif args.forecast_oscillating:
+            print(
+                "*** Starting oscillating "
+                "forecast workload"
+            )
+
+            run_forecast_oscillating(
+                net,
+                capacity_runs_path=(
+                    args.capacity_runs
+                ),
+                controller_capacity_path=(
+                    args.controller_capacity
+                ),
+                output_dir=args.output_dir,
+                duration_seconds=args.duration,
+                sampling_interval_seconds=(
+                    args.sample_interval
+                ),
+                orchestrator_url=(
+                    args.orchestrator_url
+                ),
+            )
+
+        elif args.forecast_burst:
+            print(
+                "*** Starting burst forecast workload"
+            )
+
+            run_forecast_burst(
+                net,
+                capacity_runs_path=args.capacity_runs,
+                controller_capacity_path=(
+                    args.controller_capacity
+                ),
+                output_dir=args.output_dir,
+                duration_seconds=args.duration,
+                sampling_interval_seconds=(
+                    args.sample_interval
+                ),
+                orchestrator_url=(
+                    args.orchestrator_url
+                ),
+            )
+
+        elif args.forecast_gradual:
+            print(
+                "*** Starting gradual forecast workload"
+            )
+
+            run_forecast_gradual(
+                net,
+                capacity_runs_path=args.capacity_runs,
+                controller_capacity_path=(
+                    args.controller_capacity
+                ),
+                output_dir=args.output_dir,
+                duration_seconds=args.duration,
+                sampling_interval_seconds=(
+                    args.sample_interval
+                ),
+                orchestrator_url=(
+                    args.orchestrator_url
+                ),
+            )
+
+        elif args.forecast_stable:
+            print(
+                "*** Starting stable forecast workload"
+            )
+
             run_forecast_stable(
                 net,
                 capacity_runs_path=args.capacity_runs,
-                controller_capacity_path=args.controller_capacity,
+                controller_capacity_path=(
+                    args.controller_capacity
+                ),
                 output_dir=args.output_dir,
                 duration_seconds=args.duration,
-                sampling_interval_seconds=args.sample_interval,
-                target_utilization=args.target_utilization,
-                orchestrator_url=args.orchestrator_url,
+                sampling_interval_seconds=(
+                    args.sample_interval
+                ),
+                target_utilization=(
+                    args.target_utilization
+                ),
+                orchestrator_url=(
+                    args.orchestrator_url
+                ),
             )
+
         else:
             CLI(net)
 
