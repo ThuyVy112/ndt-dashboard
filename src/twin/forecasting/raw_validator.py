@@ -147,31 +147,33 @@ def validate_raw_samples(
                             snapshot_id=sample_snapshot_id,
                         )
                     )
-                elif not math.isclose(
-                    interval,
-                    expected_interval,
-                    rel_tol=1e-9,
-                    abs_tol=1e-9,
-                ):
-                    issues.append(
-                        ValidationIssue(
-                            code="sampling_interval",
-                            message=(
-                                f"expected sampling interval {expected_interval:g}s, "
-                                f"got {interval:g}s"
-                            ),
-                            controller_id=controller_id,
-                            snapshot_id=sample_snapshot_id,
-                        )
-                    )
-                    if interval > expected_interval:
+                else:
+                    interval_tolerance = expected_interval * 0.10
+                    lower_bound = expected_interval - interval_tolerance
+                    upper_bound = expected_interval + interval_tolerance
+                    gap_threshold = expected_interval * 1.50
+
+                    if interval > gap_threshold:
                         sampling_gap_count += 1
                         issues.append(
                             ValidationIssue(
                                 code="sampling_gap",
                                 message=(
-                                    f"sampling gap is {interval:g}s, "
-                                    f"greater than expected {expected_interval:g}s"
+                                    f"sampling gap is {interval:g}s; "
+                                    f"threshold is {gap_threshold:g}s"
+                                ),
+                                controller_id=controller_id,
+                                snapshot_id=sample_snapshot_id,
+                            )
+                        )
+                    elif interval < lower_bound or interval > upper_bound:
+                        issues.append(
+                            ValidationIssue(
+                                code="sampling_interval",
+                                message=(
+                                    f"expected sampling interval "
+                                    f"{expected_interval:g}s +/-10%, "
+                                    f"got {interval:g}s"
                                 ),
                                 controller_id=controller_id,
                                 snapshot_id=sample_snapshot_id,

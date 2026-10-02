@@ -45,7 +45,10 @@ class ForecastDataRunner:
         )
 
         run_dir = self.config.output_dir / run_id
-        run_dir.mkdir(parents=True, exist_ok=False)
+        if self.config.run_id is None:
+            run_dir.mkdir(parents=True, exist_ok=False)
+        else:
+            run_dir.mkdir(parents=True, exist_ok=True)
 
         samples: list[ForecastRawSample] = []
 
@@ -74,17 +77,6 @@ class ForecastDataRunner:
                 continue
 
             workload_point = self.workload_step(elapsed)
-            # self._append_jsonl(
-            #     run_dir / "workload.jsonl",
-            #     {
-            #         "elapsed_seconds": workload_point.elapsed_seconds,
-            #         "workload_type": self.config.workload_type,
-            #         "phase": workload_point.phase,
-            #         "target_utilization": workload_point.target_utilization,
-            #         "hot_switch_id": workload_point.hot_switch_id,
-            #         "hot_switch_share": workload_point.hot_switch_share,
-            #     },
-            # )
 
             twin_state = self.twin_state_provider()
 

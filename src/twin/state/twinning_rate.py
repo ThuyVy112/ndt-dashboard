@@ -64,6 +64,10 @@ class TwinningRateTracker:
         ):
             self._attempts.popleft()
 
+    def reset(self) -> None:
+        """Clear observations from the current twinning-rate window."""
+        self._attempts.clear()
+
     def rate(
         self,
         now: datetime | None = None,

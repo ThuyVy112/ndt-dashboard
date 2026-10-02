@@ -186,18 +186,40 @@ def telemetry_loop():
     run_id = os.getenv("RUN_ID", "dev")
     poll_interval = float(telemetry_cfg["poll_interval_seconds"])
     snapshot_interval = float(telemetry_cfg["snapshot_interval_seconds"])
-    next_snapshot = time.monotonic()
+
+    if poll_interval <= 0.0:
+        raise ValueError("poll_interval_seconds must be positive")
+    if snapshot_interval <= 0.0:
+        raise ValueError("snapshot_interval_seconds must be positive")
+
+    next_poll = time.monotonic()
+    next_snapshot = next_poll
 
     while not stop_event.is_set():
-        started = time.monotonic()
         collect_once(run_id)
-        if time.monotonic() >= next_snapshot:
+
+        now = time.monotonic()
+
+        if now >= next_snapshot:
             try:
                 build_snapshot(run_id)
             except Exception as exc:
                 print(f"[snapshot] error={exc}", flush=True)
-            next_snapshot = time.monotonic() + snapshot_interval
-        stop_event.wait(max(0.0, poll_interval - (time.monotonic() - started)))
+
+            # Keep a fixed snapshot cadence instead of scheduling from
+            # the completion time of the previous snapshot.
+            while next_snapshot <= now:
+                next_snapshot += snapshot_interval
+
+        next_poll += poll_interval
+
+        now = time.monotonic()
+        while next_poll <= now:
+            next_poll += poll_interval
+
+        stop_event.wait(
+            max(0.0, next_poll - time.monotonic())
+        )
 
 
 app = FastAPI(title="NDT Safe Load Balancing Orchestrator", version="0.2.0")
@@ -306,6 +328,12 @@ def init_roles():
                     "barrier": barrier,
                 }
             )
+
+        # Start a fresh NDT-quality measurement window only after
+        # all initial OpenFlow roles have been established successfully.
+        # Startup snapshots collected before Mininet/controller readiness
+        # must not contaminate the experiment twinning-rate window.
+        twinning_tracker.reset()
 
         return {
             "status": "INITIALIZED",
