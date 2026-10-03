@@ -1,0 +1,14 @@
+{
+  "valid": true,
+  "run_id": "forecast-stable-2c20s-r01",
+  "total_samples": 360,
+  "samples_per_controller": {
+    "c1": 180,
+    "c2": 180
+  },
+  "coverage_per_controller": {
+    "c1": 1.0,
+    "c2": 1.0
+  },
+  "issues": []
+}

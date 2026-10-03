@@ -1,0 +1,21 @@
+{
+  "valid": false,
+  "total_samples": 360,
+  "invalid_snapshot_count": 0,
+  "duplicate_count": 0,
+  "sampling_gap_count": 0,
+  "issues": [
+    {
+      "code": "sampling_interval",
+      "message": "expected sampling interval 1s +/-10%, got 0.895811s",
+      "controller_id": "c1",
+      "snapshot_id": "snap-4de2260f834f"
+    },
+    {
+      "code": "sampling_interval",
+      "message": "expected sampling interval 1s +/-10%, got 0.895811s",
+      "controller_id": "c2",
+      "snapshot_id": "snap-4de2260f834f"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "valid": true,
+  "run_id": "forecast-hot-switch-2c20s-r04",
+  "total_samples": 360,
+  "samples_per_controller": {
+    "c1": 180,
+    "c2": 180
+  },
+  "coverage_per_controller": {
+    "c1": 1.0,
+    "c2": 1.0
+  },
+  "issues": []
+}

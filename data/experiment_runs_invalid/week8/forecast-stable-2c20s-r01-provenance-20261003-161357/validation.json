@@ -1,0 +1,8 @@
+{
+  "valid": true,
+  "total_samples": 360,
+  "invalid_snapshot_count": 0,
+  "duplicate_count": 0,
+  "sampling_gap_count": 0,
+  "issues": []
+}
