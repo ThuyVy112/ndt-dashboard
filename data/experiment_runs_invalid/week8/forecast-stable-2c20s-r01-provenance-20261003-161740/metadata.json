@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0",
+  "run_id": "forecast-stable-2c20s-r01",
+  "experiment_type": "forecast-dataset-2c20s",
+  "topology": "capacity_2c20s",
+  "workload_type": "stable",
+  "repeat_index": 1,
+  "seed": 101,
+  "duration_seconds": 180.0,
+  "sampling_interval_seconds": 1.0,
+  "controllers": [
+    "c1",
+    "c2"
+  ],
+  "migration_enabled": false,
+  "git_commit": "4115ffe5dbea0e056f8b5e35ba22b21d171704cf",
+  "capacity_artifact": "data/benchmarks/controller_capacity.json",
+  "started_at": "2026-10-03T16:14:22.158219+00:00",
+  "ended_at": null
+}

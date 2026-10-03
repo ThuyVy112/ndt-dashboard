@@ -1,0 +1,25 @@
+{
+  "valid": false,
+  "run_id": "forecast-stable-2c20s-r01",
+  "total_samples": 38,
+  "samples_per_controller": {
+    "c1": 19,
+    "c2": 19
+  },
+  "coverage_per_controller": {
+    "c1": 0.10555555555555556,
+    "c2": 0.10555555555555556
+  },
+  "issues": [
+    {
+      "code": "coverage_below_threshold",
+      "message": "c1: 19/180 samples (0.106) < 0.950",
+      "controller_id": "c1"
+    },
+    {
+      "code": "coverage_below_threshold",
+      "message": "c2: 19/180 samples (0.106) < 0.950",
+      "controller_id": "c2"
+    }
+  ]
+}

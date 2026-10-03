@@ -1,0 +1,8 @@
+{
+  "total_samples": 360,
+  "samples_per_controller": {
+    "c1": 180,
+    "c2": 180
+  },
+  "validation_passed": true
+}
