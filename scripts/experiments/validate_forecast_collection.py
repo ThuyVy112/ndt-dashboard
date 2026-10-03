@@ -9,6 +9,12 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+import sys
+
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 from src.twin.forecasting.raw_validator import validate_raw_samples
 
 
@@ -438,6 +444,7 @@ def validate_run_directory(
     run_dir: Path,
     *,
     min_coverage: float = 0.95,
+    max_gap_seconds: float = 2.5,
 ) -> CollectionValidationResult:
     metadata = _load_json(run_dir / "metadata.json")
     samples = _load_jsonl(run_dir / "forecast_samples.jsonl")
@@ -446,6 +453,7 @@ def validate_run_directory(
         metadata=metadata,
         samples=samples,
         min_coverage=min_coverage,
+        max_gap_seconds=max_gap_seconds,
     )
 
 
@@ -459,6 +467,13 @@ def main() -> int:
         type=float,
         default=0.95,
     )
+
+    parser.add_argument(
+        "--max-gap-seconds",
+        type=float,
+        default=2.5,
+        help="Maximum allowed per-controller sampling gap in seconds.",
+    )
     parser.add_argument(
         "--output",
         type=Path,
@@ -469,6 +484,7 @@ def main() -> int:
     result = validate_run_directory(
         args.run_dir,
         min_coverage=args.min_coverage,
+        max_gap_seconds=args.max_gap_seconds,
     )
 
     payload = {
