@@ -1,62 +1,19 @@
 schema_version: "1.0"
 
 experiment:
-  name: forecast-dataset-2c20s
   type: forecast-dataset-2c20s
+  topology: capacity_2c20s
+  output_root: data/experiment_runs
 
-scenarios:
-  c1:
-    source_host: h1
-    source_ip: "10.0.0.1"
-    target_host: h10
-    target_ip: "10.0.0.10"
-    path_switches:
-      - s1
-      - s2
-      - s3
-      - s4
-      - s5
-      - s6
-      - s7
-      - s8
-      - s9
-      - s10
-  c2:
-    source_host: h11
-    source_ip: "10.0.0.11"
-    target_host: h20
-    target_ip: "10.0.0.20"
-    path_switches:
-      - s11
-      - s12
-      - s13
-      - s14
-      - s15
-      - s16
-      - s17
-      - s18
-      - s19
-      - s20
+sampling_interval_seconds: 1.0
 
-runtime:
-  orchestrator_url: "http://127.0.0.1:9000"
-
-workload:
-  protocol: udp
-  target_port: 9000
-  source_port_start: 12000
-  source_port_end: 65000
-  flow_idle_timeout_seconds: 5.0
-  port_reuse_safety_factor: 2.0
-
-topology:
-  name: capacity_2c20s
+timing:
+  duration_seconds: 180
+  warmup_seconds: 10
+  cooldown_seconds: 10
 
 migration:
   enabled: false
-
-sampling:
-  interval_seconds: 1.0
 
 controllers:
   - c1
@@ -67,14 +24,9 @@ workloads:
   - gradual
   - burst
   - oscillating
-  - hot_switch
+  - hot-switch
 
-smoke:
-  duration_seconds: 60
-
-full:
-  duration_seconds: 180
-  repeats: 5
+repeats: 5
 
 seeds:
   - 101
@@ -82,3 +34,12 @@ seeds:
   - 103
   - 104
   - 105
+
+validation:
+  require_fixed_ownership: true
+  require_capacity_version: true
+  require_snapshot_quality_fields: true
+  expected_sample_interval_seconds: 1.0
+  min_sample_coverage_ratio: 0.95
+  max_gap_seconds: 2.5
+  max_send_error_ratio: 0.01

@@ -25,6 +25,12 @@ class ForecastRunConfig:
     controller_ids: tuple[str, ...]
     output_dir: Path
     run_id: str | None = None
+    experiment_type: str | None = None
+    topology: str | None = None
+    repeat_index: int | None = None
+    seed: int | None = None
+    capacity_artifact: str | None = None
+    git_commit: str | None = None
 
 
 class ForecastDataRunner:
@@ -52,9 +58,12 @@ class ForecastDataRunner:
 
         samples: list[ForecastRawSample] = []
 
+        started_at = datetime.now(timezone.utc)
+
         self._write_metadata(
             run_dir,
             run_id,
+            started_at=started_at,
         )
 
         start_monotonic = time.monotonic()
@@ -104,6 +113,11 @@ class ForecastDataRunner:
         self._finalize(
             run_dir=run_dir,
             samples=samples,
+        )
+
+        self._complete_metadata(
+            run_dir=run_dir,
+            ended_at=datetime.now(timezone.utc),
         )
 
         return run_dir
@@ -202,20 +216,58 @@ class ForecastDataRunner:
         self,
         run_dir: Path,
         run_id: str,
+        *,
+        started_at: datetime | None = None,
     ) -> None:
+        if started_at is None:
+            started_at = datetime.now(timezone.utc)
+
         metadata = {
             "schema_version": "1.0",
             "run_id": run_id,
+            "experiment_type": self.config.experiment_type,
+            "topology": self.config.topology,
             "workload_type": self.config.workload_type,
+            "repeat_index": self.config.repeat_index,
+            "seed": self.config.seed,
             "duration_seconds": self.config.duration_seconds,
             "sampling_interval_seconds": self.config.sampling_interval_seconds,
             "controllers": list(self.config.controller_ids),
             "migration_enabled": False,
+            "git_commit": self.config.git_commit,
+            "capacity_artifact": self.config.capacity_artifact,
+            "started_at": started_at.isoformat(),
+            "ended_at": None,
         }
         (run_dir / "metadata.json").write_text(
             json.dumps(metadata, indent=2) + "\n",
             encoding="utf-8",
         )
+
+    @staticmethod
+    def _complete_metadata(
+        *,
+        run_dir: Path,
+        ended_at: datetime,
+    ) -> None:
+        metadata_path = run_dir / "metadata.json"
+
+        metadata = json.loads(
+            metadata_path.read_text(encoding="utf-8")
+        )
+
+        metadata["ended_at"] = ended_at.isoformat()
+
+        temporary_path = metadata_path.with_suffix(
+            ".json.tmp"
+        )
+
+        temporary_path.write_text(
+            json.dumps(metadata, indent=2) + "\n",
+            encoding="utf-8",
+        )
+
+        temporary_path.replace(metadata_path)
 
     def _finalize(
         self,

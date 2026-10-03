@@ -152,6 +152,13 @@ def run_forecast_stable(
     sampling_interval_seconds: float = 1.0,
     target_utilization: float = 0.60,
     orchestrator_url: str = DEFAULT_ORCHESTRATOR_URL,
+    run_id: str | None = None,
+    experiment_type: str | None = None,
+    topology: str | None = None,
+    repeat_index: int | None = None,
+    seed: int | None = None,
+    capacity_artifact: str | None = None,
+    git_commit: str | None = None,
 ) -> Path:
     mapper = CapacityWorkloadMapper(
         capacity_runs_path=capacity_runs_path,
@@ -179,7 +186,7 @@ def run_forecast_stable(
         exist_ok=True,
     )
 
-    run_id = f"stable-{uuid.uuid4().hex[:8]}"
+    run_id = run_id or f"stable-{uuid.uuid4().hex[:8]}"
     run_dir = output_dir / run_id
 
     run_dir.mkdir(
@@ -291,6 +298,12 @@ def run_forecast_stable(
                 controller_ids=CONTROLLER_IDS,
                 output_dir=output_dir,
                 run_id=run_id,
+                experiment_type=experiment_type,
+                topology=topology,
+                repeat_index=repeat_index,
+                seed=seed,
+                capacity_artifact=capacity_artifact,
+                git_commit=git_commit,
             ),
             twin_state_provider=lambda: get_twin_state(
                 orchestrator_url
