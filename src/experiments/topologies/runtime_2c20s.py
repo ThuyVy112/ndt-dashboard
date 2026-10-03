@@ -97,6 +97,20 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--duration", type=float, default=60.0)
     parser.add_argument("--sample-interval", type=float, default=1.0)
+    parser.add_argument(
+        "--run-id",
+        default=None,
+        help=(
+            "deterministic experiment run ID; "
+            "if omitted, the workload runner generates a smoke UUID"
+        ),
+    )
+    parser.add_argument("--experiment-type", default=None)
+    parser.add_argument("--topology-name", default=None)
+    parser.add_argument("--repeat-index", type=int, default=None)
+    parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument("--capacity-artifact", default=None)
+    parser.add_argument("--git-commit", default=None)
     parser.add_argument("--target-utilization", type=float, default=0.60)
     parser.add_argument(
         "--orchestrator-url",
@@ -246,6 +260,13 @@ def main() -> None:
                 orchestrator_url=(
                     args.orchestrator_url
                 ),
+                run_id=args.run_id,
+                experiment_type=args.experiment_type,
+                topology=args.topology_name,
+                repeat_index=args.repeat_index,
+                seed=args.seed,
+                capacity_artifact=args.capacity_artifact,
+                git_commit=args.git_commit,
             )
 
         elif args.forecast_oscillating:
@@ -270,6 +291,13 @@ def main() -> None:
                 orchestrator_url=(
                     args.orchestrator_url
                 ),
+                run_id=args.run_id,
+                experiment_type=args.experiment_type,
+                topology=args.topology_name,
+                repeat_index=args.repeat_index,
+                seed=args.seed,
+                capacity_artifact=args.capacity_artifact,
+                git_commit=args.git_commit,
             )
 
         elif args.forecast_burst:
@@ -291,6 +319,13 @@ def main() -> None:
                 orchestrator_url=(
                     args.orchestrator_url
                 ),
+                run_id=args.run_id,
+                experiment_type=args.experiment_type,
+                topology=args.topology_name,
+                repeat_index=args.repeat_index,
+                seed=args.seed,
+                capacity_artifact=args.capacity_artifact,
+                git_commit=args.git_commit,
             )
 
         elif args.forecast_gradual:
@@ -312,6 +347,13 @@ def main() -> None:
                 orchestrator_url=(
                     args.orchestrator_url
                 ),
+                run_id=args.run_id,
+                experiment_type=args.experiment_type,
+                topology=args.topology_name,
+                repeat_index=args.repeat_index,
+                seed=args.seed,
+                capacity_artifact=args.capacity_artifact,
+                git_commit=args.git_commit,
             )
 
         elif args.forecast_stable:
@@ -336,6 +378,13 @@ def main() -> None:
                 orchestrator_url=(
                     args.orchestrator_url
                 ),
+                run_id=args.run_id,
+                experiment_type=args.experiment_type,
+                topology=args.topology_name,
+                repeat_index=args.repeat_index,
+                seed=args.seed,
+                capacity_artifact=args.capacity_artifact,
+                git_commit=args.git_commit,
             )
 
         else:

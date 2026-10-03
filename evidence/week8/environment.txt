@@ -1,0 +1,15 @@
+=== Python ===
+Python 3.10.12
+
+=== Kernel ===
+Linux kltn-sdn 6.8.0-1066-gcp #74~22.04.1-Ubuntu SMP Fri Aug  7 21:51:15 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+
+=== Mininet ===
+2.3.0
+
+=== Open vSwitch ===
+ovs-vsctl (Open vSwitch) 2.17.9
+DB Schema 8.3.0
+
+=== Git commit ===
+4115ffe5dbea0e056f8b5e35ba22b21d171704cf
