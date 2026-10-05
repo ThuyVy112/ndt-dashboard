@@ -51,7 +51,7 @@ class ForecastCollectionPlanTests(unittest.TestCase):
 
         self.assertEqual(
             runs[0].run_id,
-            "forecast-stable-2c20s-r01",
+            "stable-r01-s101",
         )
         self.assertEqual(
             runs[0].workload,
@@ -68,7 +68,7 @@ class ForecastCollectionPlanTests(unittest.TestCase):
 
         self.assertEqual(
             runs[-1].run_id,
-            "forecast-hot-switch-2c20s-r05",
+            "hot-switch-r05-s105",
         )
         self.assertEqual(
             runs[-1].workload,
