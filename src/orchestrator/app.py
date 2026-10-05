@@ -8,6 +8,7 @@ from pathlib import Path
 
 import yaml
 from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from src.common.enums import TransactionState
@@ -223,6 +224,14 @@ def telemetry_loop():
 
 
 app = FastAPI(title="NDT Safe Load Balancing Orchestrator", version="0.2.0")
+
+# Serve the dashboard from the same origin as the API (http://<host>/dashboard/):
+# one `git pull` updates backend and UI together, no CORS or rewrite needed.
+app.mount(
+    "/dashboard",
+    StaticFiles(directory=ROOT / "dashboard", html=True),
+    name="dashboard",
+)
 
 
 @app.on_event("startup")
