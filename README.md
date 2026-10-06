@@ -173,6 +173,11 @@ Terminal 4 — Mininet 2C-4S smoke topology:
 ```bash
 sudo python3 src/experiments/topologies/smoke_2c4s.py
 ```
+Terminal 5 — Dashboard (Cloudflare Tunnel):
+
+```bash
+cloudflared tunnel --url http://127.0.0.1:8080
+```
 
 Do not generate traffic before roles are initialized.
 
