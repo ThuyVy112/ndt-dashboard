@@ -5,6 +5,7 @@ config --> profile.target_at(t) --> target utilization --> CapacityWorkloadMappe
 from __future__ import annotations
 
 import json
+import os
 import time
 import uuid
 from dataclasses import dataclass
@@ -14,6 +15,7 @@ from typing import Any, Callable
 
 from src.experiments.workloads.profile import WorkloadPoint
 from src.schemas.forecasting import ForecastRawSample
+from src.twin.capacity.model import CapacityModel
 from src.twin.forecasting.raw_validator import validate_raw_samples
 
 
@@ -31,6 +33,7 @@ class ForecastRunConfig:
     seed: int | None = None
     capacity_artifact: str | None = None
     git_commit: str | None = None
+    git_tag: str | None = None
 
 
 class ForecastDataRunner:
@@ -236,6 +239,8 @@ class ForecastDataRunner:
             "migration_enabled": False,
             "git_commit": self.config.git_commit,
             "capacity_artifact": self.config.capacity_artifact,
+            "git_tag": self._git_tag(),
+            **self._safe_capacity_fields(),
             "started_at": started_at.isoformat(),
             "ended_at": None,
         }
@@ -243,6 +248,30 @@ class ForecastDataRunner:
             json.dumps(metadata, indent=2) + "\n",
             encoding="utf-8",
         )
+
+    def _git_tag(self) -> str | None:
+        # collect_forecast_data.sh exports FORECAST_GIT_TAG (the frozen tag),
+        # so the runtime itself needs no extra command-line plumbing.
+        return self.config.git_tag or os.environ.get("FORECAST_GIT_TAG") or None
+
+    def _safe_capacity_fields(self) -> dict[str, float]:
+        """safe_capacity_<controller> read from the frozen capacity artifact.
+
+        Stored in metadata so validate_forecast_collection.py can prove every
+        sample used the capacity recorded for the run.
+        """
+        if not self.config.capacity_artifact:
+            return {}
+
+        path = Path(self.config.capacity_artifact)
+        if not path.exists():
+            return {}
+
+        model = CapacityModel.from_file(path)
+        return {
+            f"safe_capacity_{controller_id}": model.safe_capacity(controller_id)
+            for controller_id in self.config.controller_ids
+        }
 
     @staticmethod
     def _complete_metadata(

@@ -64,9 +64,11 @@ def build_plan(config: dict[str, Any]) -> list[ForecastCollectionRun]:
             repeat_index = index + 1
             seed = int(seeds[index])
 
+            # Deterministic run id: {workload}-r{NN}-s{seed},
+            # e.g. stable-r01-s101 / hot-switch-r05-s105.
+            # src.twin.forecasting.splitter.parse_run_id reads this format.
             run_id = (
-                f"forecast-{workload_name}-2c20s-"
-                f"r{repeat_index:02d}"
+                f"{workload_name}-r{repeat_index:02d}-s{seed}"
             )
 
             runs.append(
